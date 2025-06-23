@@ -1,0 +1,18 @@
+// vim:filetype=json5
+{
+	"config": {
+		// Address and port the web server should bind to
+		"BindAddress": "127.0.0.1",
+		"BindPort": 5556,
+		// URL the StepCA server is reachable under
+		"CaUrl": "https://localhost:9000",
+		// SHA256 hash of the root CA certificate used by the StepCA server
+		"CaHash": "9da25f5056fdc3901a827b5e2639af48bef834f17e51a2de15e38e2f775c907e",
+		// Oauth2 client ID
+		"ClientId": "xxx",
+		// Oauth2  client secret (client must be confidential)
+		"ClientSecret": "xxxxx",
+		// URL under which the .well-known/ OIDC discovery data can be found
+		"OidcBaseUrl": "https://sheldon01-dev.dmz-prg2.suse.org/application/o/georg-stepca-test-app/"
+	}
+}
