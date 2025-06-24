@@ -141,8 +141,14 @@ func (s *Stepdance) certReqHandler(w http.ResponseWriter, r *http.Request) {
 	sessionManager.Put(r.Context(), "origPath", "/certificate/request")
 
 	// TOOD: validate session?
+	// currently it will just fail if a bogus token is passed, better would be to return early
 
 	accessToken := sessionManager.GetString(r.Context(), "token")
+	if accessToken == "" {
+		slog.Debug("certificate request attempted without token")
+		s.templates.MissingCode.Execute(w, nil)
+		return
+	}
 
 	c, k := s.makeCertAndKey(accessToken)
 	if c == nil || k == nil {
