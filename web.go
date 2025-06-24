@@ -19,6 +19,7 @@ type Stepdance struct {
 	ctx          context.Context
 	step         *ca.Client
 	verifier     *oidc.IDTokenVerifier
+	templates    *Templates
 }
 
 func initStepdance(s *Stepdance, bind string) {
@@ -35,26 +36,24 @@ func initStepdance(s *Stepdance, bind string) {
 	mux.HandleFunc("/certificate/download", s.downloadHandler)
 	mux.HandleFunc("/certificate/request", s.certReqHandler)
 
+	var tok bool
+	s.templates, tok = readTemplates()
+	if !tok {
+		return
+	}
+
 	slog.Info("Starting to listen ...", "bind", bind)
 	panic(http.ListenAndServe(bind, sessionManager.LoadAndSave(mux)))
 }
 
 func (s *Stepdance) indexHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "text/html")
-	w.Write([]byte(`
-		<html>
-		<body>
-		<a href="/certificate/request">Request certificate</a>
-		<br>
-		<a href="/login">Login</a>
-		</body>
-		</html>
-	`))
+	s.templates.Index.Execute(w, nil)
 }
 
-func checkState(w http.ResponseWriter, r *http.Request) bool {
+func (s *Stepdance) checkState(w http.ResponseWriter, r *http.Request) bool {
 	if sessionManager.GetString(r.Context(), "state") != r.URL.Query().Get("state") {
-		w.Write([]byte("<html>State mismatch, need to <a href=\"/login\">Login</a>?</html>"))
+		s.templates.Index.Execute(w, nil)
 		return false
 	}
 
@@ -80,7 +79,7 @@ func (s *Stepdance) loginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Stepdance) callbackHandler(w http.ResponseWriter, r *http.Request) {
-	if !checkState(w, r) {
+	if !s.checkState(w, r) {
 		return
 	}
 
@@ -102,7 +101,7 @@ func (s *Stepdance) certReqHandler(w http.ResponseWriter, r *http.Request) {
 	code := sessionManager.GetString(r.Context(), "code")
 
 	if code == "" {
-		w.Write([]byte("<html>Missing code, need to <a href=\"/login\">Login</a>?</html>"))
+		s.templates.MissingCode.Execute(w, nil)
 		return
 	}
 
@@ -140,22 +139,14 @@ func (s *Stepdance) certReqHandler(w http.ResponseWriter, r *http.Request) {
 	sessionManager.Put(r.Context(), "k", k)
 
 	w.Header().Add("Content-Type", "text/html")
-	state := sessionManager.GetString(r.Context(), "state")
-	w.Write([]byte(`
-		<html>
-		<body>
-		<a href="/certificate/download?state=` + state + `&data=certificate">Download certificate</a>
-		<br>
-		<a href="/certificate/download?state=` + state + `&data=key">Download private key</a>
-		</body>
-		</html>
-	`))
+	p := PageData{State: sessionManager.GetString(r.Context(), "state")}
+	s.templates.CertificateRequest.Execute(w, p)
 }
 
 func (s *Stepdance) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	sessionManager.Put(r.Context(), "origPath", "/certificate/download")
 
-	if !checkState(w, r) {
+	if !s.checkState(w, r) {
 		return
 	}
 
