@@ -1,8 +1,26 @@
 <html>
+  <head>
+    <link rel="stylesheet" href="static/bootstrap.css" type="text/css"/>
+    <link rel="stylesheet" href="static/boxes.css" type="text/css"/>
+  </head>
   <body>
-    <a href="/certificate/request">Request certificate</a>
-    <br>
-    <a href="/login">Login</a>
+    <section class="p-style-buttons u-margin-bottom">
+        <div class="l-container">
+{{if .Subject}}
+	    <p class="t1-heading-3 u-margin-bottom-large">Hello, {{.Subject}}</p>
+{{- end }}
+            <div class="l-flex l-flex--justify-start u-margin-bottom">
+                <div class="l-flex__item l-flex l-flex--column p-style-buttons__background p-style-buttons__background--light u-margin-bottom">
+
+{{if .Subject}}
+                  <a class="c1-btn c1-btn--primary u-margin-bottom persimmon" href="/certificate/request">Request certificate</a>
+{{- else }}
+                  <a class="c1-btn persimmon--secondary u-margin-bottom" href="/login">Login</a>
+{{- end }}
+                </div>
+            </div>
+        </div>
+    </section>
   </body>
 </html>
 

@@ -77,6 +77,8 @@ func main() {
 		ClientID: c.ClientId,
 	}
 
+	s.oidcProvider = provider
+
 	s.verifier = provider.Verifier(s.oidcConfig)
 
 	// todo: IPv6 wrap

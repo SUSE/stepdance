@@ -13,7 +13,8 @@ type Templates struct {
 }
 
 type PageData struct {
-	State string
+	Subject string
+	State   string
 }
 
 func readTemplates() (*Templates, bool) {

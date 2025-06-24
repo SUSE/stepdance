@@ -16,6 +16,7 @@ var sessionManager *scs.SessionManager
 type Stepdance struct {
 	oauth2Config oauth2.Config
 	oidcConfig   *oidc.Config
+	oidcProvider *oidc.Provider
 	ctx          context.Context
 	step         *ca.Client
 	verifier     *oidc.IDTokenVerifier
@@ -36,6 +37,8 @@ func initStepdance(s *Stepdance, bind string) {
 	mux.HandleFunc("/certificate/download", s.downloadHandler)
 	mux.HandleFunc("/certificate/request", s.certReqHandler)
 
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
+
 	var tok bool
 	s.templates, tok = readTemplates()
 	if !tok {
@@ -48,7 +51,8 @@ func initStepdance(s *Stepdance, bind string) {
 
 func (s *Stepdance) indexHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "text/html")
-	s.templates.Index.Execute(w, nil)
+	p := PageData{Subject: sessionManager.GetString(r.Context(), "subject")}
+	s.templates.Index.Execute(w, p)
 }
 
 func (s *Stepdance) checkState(w http.ResponseWriter, r *http.Request) bool {
@@ -83,22 +87,7 @@ func (s *Stepdance) callbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionManager.Put(r.Context(), "code", r.URL.Query().Get("code"))
-
-	path := sessionManager.GetString(r.Context(), "origPath")
-	if path == "" {
-		path = "/"
-	}
-
-	http.Redirect(w, r, path, http.StatusFound)
-}
-
-func (s *Stepdance) certReqHandler(w http.ResponseWriter, r *http.Request) {
-	sessionManager.Put(r.Context(), "origPath", "/certificate/request")
-
-	// TOOD: validate session?
-
-	code := sessionManager.GetString(r.Context(), "code")
+	code := r.URL.Query().Get("code")
 
 	if code == "" {
 		s.templates.MissingCode.Execute(w, nil)
@@ -129,7 +118,33 @@ func (s *Stepdance) certReqHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c, k := s.makeCertAndKey(oauth2Token.AccessToken)
+	sessionManager.Put(r.Context(), "token", oauth2Token.AccessToken)
+	ui, err := s.oidcProvider.UserInfo(s.ctx, s.oauth2Config.TokenSource(s.ctx, oauth2Token))
+	if err != nil {
+		slog.Error("Failed to query userinfo", "error", err)
+		http.Error(w, "Cannot determine subject", http.StatusInternalServerError)
+		return
+	}
+
+	slog.Info("Authenticated user", "subject", ui.Subject)
+	sessionManager.Put(r.Context(), "subject", ui.Subject)
+
+	path := sessionManager.GetString(r.Context(), "origPath")
+	if path == "" {
+		path = "/"
+	}
+
+	http.Redirect(w, r, path, http.StatusFound)
+}
+
+func (s *Stepdance) certReqHandler(w http.ResponseWriter, r *http.Request) {
+	sessionManager.Put(r.Context(), "origPath", "/certificate/request")
+
+	// TOOD: validate session?
+
+	accessToken := sessionManager.GetString(r.Context(), "token")
+
+	c, k := s.makeCertAndKey(accessToken)
 	if c == nil || k == nil {
 		http.Error(w, "Certificate or key generation failed", http.StatusBadRequest)
 		return
