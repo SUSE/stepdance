@@ -32,7 +32,8 @@ func initStepdance(s *Stepdance, bind string) {
 	mux.HandleFunc("/", s.indexHandler)
 	mux.HandleFunc("/login", s.loginHandler)
 	mux.HandleFunc("/callback", s.callbackHandler)
-	mux.HandleFunc("/download", s.downloadHandler)
+	mux.HandleFunc("/certificate/download", s.downloadHandler)
+	mux.HandleFunc("/certificate/request", s.certReqHandler)
 
 	slog.Info("Starting to listen ...", "bind", bind)
 	panic(http.ListenAndServe(bind, sessionManager.LoadAndSave(mux)))
@@ -41,12 +42,19 @@ func initStepdance(s *Stepdance, bind string) {
 func (s *Stepdance) indexHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "text/html")
 	w.Write([]byte(`
-		<html><body><a href="/login">Login</a></body></html>
+		<html>
+		<body>
+		<a href="/certificate/request">Request certificate</a>
+		<br>
+		<a href="/login">Login</a>
+		</body>
+		</html>
 	`))
 }
 
-func checkState(r *http.Request) bool {
+func checkState(w http.ResponseWriter, r *http.Request) bool {
 	if sessionManager.GetString(r.Context(), "state") != r.URL.Query().Get("state") {
+		w.Write([]byte("<html>State mismatch, need to <a href=\"/login\">Login</a>?</html>"))
 		return false
 	}
 
@@ -72,12 +80,33 @@ func (s *Stepdance) loginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Stepdance) callbackHandler(w http.ResponseWriter, r *http.Request) {
-	if !checkState(r) {
-		http.Error(w, "State mismatch", http.StatusBadRequest)
+	if !checkState(w, r) {
 		return
 	}
 
-	oauth2Token, err := s.oauth2Config.Exchange(s.ctx, r.URL.Query().Get("code"))
+	sessionManager.Put(r.Context(), "code", r.URL.Query().Get("code"))
+
+	path := sessionManager.GetString(r.Context(), "origPath")
+	if path == "" {
+		path = "/"
+	}
+
+	http.Redirect(w, r, path, http.StatusFound)
+}
+
+func (s *Stepdance) certReqHandler(w http.ResponseWriter, r *http.Request) {
+	sessionManager.Put(r.Context(), "origPath", "/certificate/request")
+
+	// TOOD: validate session?
+
+	code := sessionManager.GetString(r.Context(), "code")
+
+	if code == "" {
+		w.Write([]byte("<html>Missing code, need to <a href=\"/login\">Login</a>?</html>"))
+		return
+	}
+
+	oauth2Token, err := s.oauth2Config.Exchange(s.ctx, code)
 	if err != nil {
 		http.Error(w, "Token exchange failed: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -115,17 +144,18 @@ func (s *Stepdance) callbackHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`
 		<html>
 		<body>
-		<a href="/download?state=` + state + `&data=certificate">Download certificate</a>
+		<a href="/certificate/download?state=` + state + `&data=certificate">Download certificate</a>
 		<br>
-		<a href="/download?state=` + state + `&data=key">Download private key</a>
+		<a href="/certificate/download?state=` + state + `&data=key">Download private key</a>
 		</body>
 		</html>
 	`))
 }
 
 func (s *Stepdance) downloadHandler(w http.ResponseWriter, r *http.Request) {
-	if !checkState(r) {
-		http.Error(w, "State mismatch", http.StatusBadRequest)
+	sessionManager.Put(r.Context(), "origPath", "/certificate/download")
+
+	if !checkState(w, r) {
 		return
 	}
 
