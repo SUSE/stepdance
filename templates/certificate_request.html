@@ -1,8 +1,12 @@
 <html>
+  <head>
+    <link rel="stylesheet" href="static/bootstrap.css" type="text/css"/>
+    <link rel="stylesheet" href="static/boxes.css" type="text/css"/>
+  </head>
   <body>
-    <a href="/certificate/download?state={{.State}}&data=certificate">Download certificate</a>
+    <a class="c1-btn c1-btn--primary u-margin-bottom persimmon" href="/certificate/download?state={{.State}}&data=certificate">Download certificate</a>
     <br>
-    <a href="/certificate/download?state={{.State}}&data=key">Download private key</a>
+    <a class="c1-btn persimmon--secondary u-margin-bottom" href="/certificate/download?state={{.State}}&data=key">Download private key</a>
   </body>
 </html>
 
