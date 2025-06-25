@@ -50,6 +50,11 @@ func initStepdance(s *Stepdance, bind string) {
 }
 
 func (s *Stepdance) indexHandler(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+
 	w.Header().Add("Content-Type", "text/html")
 	p := PageData{Subject: sessionManager.GetString(r.Context(), "subject")}
 	s.templates.Index.ExecuteTemplate(w, "base", p)
