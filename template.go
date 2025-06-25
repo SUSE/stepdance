@@ -2,7 +2,6 @@ package main
 
 import (
 	"html/template"
-	"log/slog"
 )
 
 type Templates struct {
@@ -21,35 +20,10 @@ func readTemplates() (*Templates, bool) {
 	tmpldir := "./templates/"
 	tmpls := new(Templates)
 
-	// pretty sure there's a better way to do all these
-
-	t, err := template.ParseFiles(tmpldir + "index.html")
-	if err != nil {
-		slog.Error("Template parsing failed", "template", "index.html", "error", err)
-		return nil, false
-	}
-	tmpls.Index = t
-
-	t, err = template.ParseFiles(tmpldir + "state_mismatch.html")
-	if err != nil {
-		slog.Error("Template parsing failed", "template", "state_mismatch.html", "error", err)
-		return nil, false
-	}
-	tmpls.StateMismatch = t
-
-	t, err = template.ParseFiles(tmpldir + "missing_code.html")
-	if err != nil {
-		slog.Error("Template parsing failed", "template", "missing_code.html", "error", err)
-		return nil, false
-	}
-	tmpls.MissingCode = t
-
-	t, err = template.ParseFiles(tmpldir + "certificate_request.html")
-	if err != nil {
-		slog.Error("Template parsing failed", "template", "certificate_request.html", "error", err)
-		return nil, false
-	}
-	tmpls.CertificateRequest = t
+	tmpls.Index = template.Must(template.ParseFiles(tmpldir + "index.html", tmpldir + "top.html", tmpldir + "base.html"))
+	tmpls.StateMismatch = template.Must(template.ParseFiles(tmpldir + "state_mismatch.html", tmpldir + "top.html", tmpldir + "base.html"))
+	tmpls.MissingCode = template.Must(template.ParseFiles(tmpldir + "missing_code.html", tmpldir + "top.html", tmpldir + "base.html"))
+	tmpls.CertificateRequest = template.Must(template.ParseFiles(tmpldir + "certificate_request.html", tmpldir + "top.html", tmpldir + "base.html"))
 
 	return tmpls, true
 }

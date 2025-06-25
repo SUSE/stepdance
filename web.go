@@ -52,12 +52,12 @@ func initStepdance(s *Stepdance, bind string) {
 func (s *Stepdance) indexHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "text/html")
 	p := PageData{Subject: sessionManager.GetString(r.Context(), "subject")}
-	s.templates.Index.Execute(w, p)
+	s.templates.Index.ExecuteTemplate(w, "base", p)
 }
 
 func (s *Stepdance) checkState(w http.ResponseWriter, r *http.Request) bool {
 	if sessionManager.GetString(r.Context(), "state") != r.URL.Query().Get("state") {
-		s.templates.Index.Execute(w, nil)
+		s.templates.Index.ExecuteTemplate(w, "base", nil)
 		return false
 	}
 
@@ -90,7 +90,7 @@ func (s *Stepdance) callbackHandler(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 
 	if code == "" {
-		s.templates.MissingCode.Execute(w, nil)
+		s.templates.MissingCode.ExecuteTemplate(w, "base", nil)
 		return
 	}
 
@@ -146,7 +146,7 @@ func (s *Stepdance) certReqHandler(w http.ResponseWriter, r *http.Request) {
 	accessToken := sessionManager.GetString(r.Context(), "token")
 	if accessToken == "" {
 		slog.Debug("certificate request attempted without token")
-		s.templates.MissingCode.Execute(w, nil)
+		s.templates.MissingCode.ExecuteTemplate(w, "base", nil)
 		return
 	}
 
@@ -161,7 +161,7 @@ func (s *Stepdance) certReqHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Add("Content-Type", "text/html")
 	p := PageData{State: sessionManager.GetString(r.Context(), "state")}
-	s.templates.CertificateRequest.Execute(w, p)
+	s.templates.CertificateRequest.ExecuteTemplate(w, "base", p)
 }
 
 func (s *Stepdance) downloadHandler(w http.ResponseWriter, r *http.Request) {
