@@ -1,34 +1,28 @@
-package main
+package web
 
 import (
+	"github.com/SUSE/stepdance/cert"
 	"github.com/alexedwards/scs/v2"
 	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/smallstep/certificates/ca"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
 	"log/slog"
 	"net/http"
-	"time"
 )
 
-var sessionManager *scs.SessionManager
-
 type Stepdance struct {
-	oauth2Config oauth2.Config
-	oidcConfig   *oidc.Config
-	oidcProvider *oidc.Provider
-	ctx          context.Context
-	step         *ca.Client
-	verifier     *oidc.IDTokenVerifier
-	templates    *Templates
+	Oauth2Config   oauth2.Config
+	OidcConfig     *oidc.Config
+	OidcProvider   *oidc.Provider
+	Ctx            context.Context
+	Verifier       *oidc.IDTokenVerifier
+	templates      *Templates
+	sessionManager *scs.SessionManager
+	Step           *cert.Step
 }
 
-func initStepdance(s *Stepdance, bind string) {
-	sessionManager = scs.New()
-	sessionManager.Lifetime = 60 * time.Second
-	sessionManager.Cookie.Secure = true
-	sessionManager.Cookie.HttpOnly = true
-	//sessionManager.Cookie.SameSite = http.SameSiteStrictMode
+func InitStepdance(s *Stepdance, bind string) {
+	s.sessionManager = newSessionManager()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.indexHandler)
@@ -37,7 +31,7 @@ func initStepdance(s *Stepdance, bind string) {
 	mux.HandleFunc("/certificate/download", s.downloadHandler)
 	mux.HandleFunc("/certificate/request", s.certReqHandler)
 
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./web/static"))))
 
 	var tok bool
 	s.templates, tok = readTemplates()
@@ -46,7 +40,7 @@ func initStepdance(s *Stepdance, bind string) {
 	}
 
 	slog.Info("Starting to listen ...", "bind", bind)
-	panic(http.ListenAndServe(bind, sessionManager.LoadAndSave(mux)))
+	panic(http.ListenAndServe(bind, s.sessionManager.LoadAndSave(mux)))
 }
 
 func (s *Stepdance) indexHandler(w http.ResponseWriter, r *http.Request) {
@@ -56,12 +50,12 @@ func (s *Stepdance) indexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Add("Content-Type", "text/html")
-	p := PageData{Subject: sessionManager.GetString(r.Context(), "subject")}
+	p := PageData{Subject: s.sessionManager.GetString(r.Context(), "subject")}
 	s.templates.Index.ExecuteTemplate(w, "base", p)
 }
 
 func (s *Stepdance) checkState(w http.ResponseWriter, r *http.Request) bool {
-	if sessionManager.GetString(r.Context(), "state") != r.URL.Query().Get("state") {
+	if s.sessionManager.GetString(r.Context(), "state") != r.URL.Query().Get("state") {
 		s.templates.Index.ExecuteTemplate(w, "base", nil)
 		return false
 	}
@@ -81,10 +75,10 @@ func (s *Stepdance) loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionManager.Put(r.Context(), "state", state)
-	sessionManager.Put(r.Context(), "nonce", nonce)
+	s.sessionManager.Put(r.Context(), "state", state)
+	s.sessionManager.Put(r.Context(), "nonce", nonce)
 
-	http.Redirect(w, r, s.oauth2Config.AuthCodeURL(state, oidc.Nonce(nonce)), http.StatusFound)
+	http.Redirect(w, r, s.Oauth2Config.AuthCodeURL(state, oidc.Nonce(nonce)), http.StatusFound)
 }
 
 func (s *Stepdance) callbackHandler(w http.ResponseWriter, r *http.Request) {
@@ -99,7 +93,7 @@ func (s *Stepdance) callbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	oauth2Token, err := s.oauth2Config.Exchange(s.ctx, code)
+	oauth2Token, err := s.Oauth2Config.Exchange(s.Ctx, code)
 	if err != nil {
 		http.Error(w, "Token exchange failed: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -111,20 +105,20 @@ func (s *Stepdance) callbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idToken, err := s.verifier.Verify(s.ctx, rawIDToken)
+	idToken, err := s.Verifier.Verify(s.Ctx, rawIDToken)
 	if err != nil {
 		http.Error(w, "ID token verification failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	nonce := sessionManager.GetString(r.Context(), "nonce")
+	nonce := s.sessionManager.GetString(r.Context(), "nonce")
 	if idToken.Nonce != nonce {
 		http.Error(w, "Nonce does not match", http.StatusBadRequest)
 		return
 	}
 
-	sessionManager.Put(r.Context(), "token", oauth2Token.AccessToken)
-	ui, err := s.oidcProvider.UserInfo(s.ctx, s.oauth2Config.TokenSource(s.ctx, oauth2Token))
+	s.sessionManager.Put(r.Context(), "token", oauth2Token.AccessToken)
+	ui, err := s.OidcProvider.UserInfo(s.Ctx, s.Oauth2Config.TokenSource(s.Ctx, oauth2Token))
 	if err != nil {
 		slog.Error("Failed to query userinfo", "error", err)
 		http.Error(w, "Cannot determine subject", http.StatusInternalServerError)
@@ -132,9 +126,9 @@ func (s *Stepdance) callbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("Authenticated user", "subject", ui.Subject)
-	sessionManager.Put(r.Context(), "subject", ui.Subject)
+	s.sessionManager.Put(r.Context(), "subject", ui.Subject)
 
-	path := sessionManager.GetString(r.Context(), "origPath")
+	path := s.sessionManager.GetString(r.Context(), "origPath")
 	if path == "" {
 		path = "/"
 	}
@@ -143,34 +137,34 @@ func (s *Stepdance) callbackHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Stepdance) certReqHandler(w http.ResponseWriter, r *http.Request) {
-	sessionManager.Put(r.Context(), "origPath", "/certificate/request")
+	s.sessionManager.Put(r.Context(), "origPath", "/certificate/request")
 
 	// TOOD: validate session?
 	// currently it will just fail if a bogus token is passed, better would be to return early
 
-	accessToken := sessionManager.GetString(r.Context(), "token")
+	accessToken := s.sessionManager.GetString(r.Context(), "token")
 	if accessToken == "" {
 		slog.Debug("certificate request attempted without token")
 		s.templates.MissingCode.ExecuteTemplate(w, "base", nil)
 		return
 	}
 
-	c, k := s.makeCertAndKey(accessToken)
+	c, k := s.Step.MakeCertAndKey(accessToken)
 	if c == nil || k == nil {
 		http.Error(w, "Certificate or key generation failed", http.StatusBadRequest)
 		return
 	}
 
-	sessionManager.Put(r.Context(), "c", c)
-	sessionManager.Put(r.Context(), "k", k)
+	s.sessionManager.Put(r.Context(), "c", c)
+	s.sessionManager.Put(r.Context(), "k", k)
 
 	w.Header().Add("Content-Type", "text/html")
-	p := PageData{State: sessionManager.GetString(r.Context(), "state")}
+	p := PageData{State: s.sessionManager.GetString(r.Context(), "state")}
 	s.templates.CertificateRequest.ExecuteTemplate(w, "base", p)
 }
 
 func (s *Stepdance) downloadHandler(w http.ResponseWriter, r *http.Request) {
-	sessionManager.Put(r.Context(), "origPath", "/certificate/download")
+	s.sessionManager.Put(r.Context(), "origPath", "/certificate/download")
 
 	if !s.checkState(w, r) {
 		return
@@ -180,10 +174,10 @@ func (s *Stepdance) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	var data []byte
 	var ok bool
 	if want == "certificate" {
-		data, ok = sessionManager.Get(r.Context(), "c").([]byte)
+		data, ok = s.sessionManager.Get(r.Context(), "c").([]byte)
 		w.Header().Add("Content-Disposition", "attachment; filename=crt.pem")
 	} else if want == "key" {
-		data, ok = sessionManager.Get(r.Context(), "k").([]byte)
+		data, ok = s.sessionManager.Get(r.Context(), "k").([]byte)
 		w.Header().Add("Content-Disposition", "attachment; filename=key.pem")
 	}
 

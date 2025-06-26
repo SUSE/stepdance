@@ -1,4 +1,4 @@
-package main
+package cert
 
 import (
 	"crypto/ecdsa"
@@ -8,14 +8,14 @@ import (
 	"log/slog"
 )
 
-func (s *Stepdance) makeCertAndKey(token string) ([]byte, []byte) {
+func (s *Step) MakeCertAndKey(token string) ([]byte, []byte) {
 	req, key, err := ca.CreateSignRequest(token)
 	if err != nil {
 		slog.Error("failed to create signrequest", "error", err)
 		return nil, nil
 	}
 
-	signresp, err := s.step.Sign(req)
+	signresp, err := s.client.Sign(req)
 	if err != nil {
 		slog.Error("failed to sign certificate", "error", err)
 		return nil, nil

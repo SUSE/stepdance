@@ -1,27 +1,18 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"flag"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/smallstep/certificates/ca"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
-)
 
-func randString(nByte int) (string, error) {
-	b := make([]byte, nByte)
-	if _, err := io.ReadFull(rand.Reader, b); err != nil {
-		return "", err
-	}
-	return base64.RawURLEncoding.EncodeToString(b), nil
-}
+	"github.com/SUSE/stepdance/cert"
+	"github.com/SUSE/stepdance/web"
+)
 
 func main() {
 	var (
@@ -45,48 +36,33 @@ func main() {
 
 	slog.Info("Booting Stepdance ...")
 
-	slog.Debug("Initializing CA client ...")
+	s := new(web.Stepdance)
 
-	client, err := ca.NewClient(c.CaUrl, ca.WithRootSHA256(c.CaHash))
-	if err != nil {
-		slog.Error("Could not initiate CA client", "error", err)
-		os.Exit(1)
-	}
+	s.Step = cert.NewStep(c.CaUrl, c.CaHash)
 
-	health, err := client.Health()
-	if err != nil {
-		slog.Error("CA is not healthy", "error", err)
-		os.Exit(1)
-	}
-
-	slog.Debug("Got CA health response", "status", health.Status)
-
-	s := new(Stepdance)
-
-	s.ctx = context.Background()
-	s.step = client
+	s.Ctx = context.Background()
 
 	slog.Debug("Initializing OIDC provider ...")
 
-	provider, err := oidc.NewProvider(s.ctx, c.OidcBaseUrl)
+	provider, err := oidc.NewProvider(s.Ctx, c.OidcBaseUrl)
 	if err != nil {
 		panic(err)
 	}
 
-	s.oidcConfig = &oidc.Config{
+	s.OidcConfig = &oidc.Config{
 		ClientID: c.ClientId,
 	}
 
-	s.oidcProvider = provider
+	s.OidcProvider = provider
 
-	s.verifier = provider.Verifier(s.oidcConfig)
+	s.Verifier = provider.Verifier(s.OidcConfig)
 
 	// todo: IPv6 wrap
 	bind := fmt.Sprintf("%s:%d", c.BindAddress, c.BindPort)
 
 	slog.Debug("Initializing Oauth2 ...")
 
-	s.oauth2Config = oauth2.Config{
+	s.Oauth2Config = oauth2.Config{
 		ClientID:     c.ClientId,
 		ClientSecret: c.ClientSecret,
 		Endpoint:     provider.Endpoint(),
@@ -96,5 +72,5 @@ func main() {
 
 	slog.Debug("Initialization sequence complete, starting web server ...")
 
-	initStepdance(s, bind)
+	web.InitStepdance(s, bind)
 }
