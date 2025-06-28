@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/net/context"
@@ -72,5 +73,12 @@ func main() {
 
 	slog.Debug("Initialization sequence complete, starting web server ...")
 
-	web.InitStepdance(s, bind)
+	cs := make(chan os.Signal, 1)
+
+	srv := web.InitStepdance(s, bind)
+	defer srv.Shutdown(context.Background())
+
+	signal.Notify(cs, os.Interrupt)
+
+	<-cs
 }

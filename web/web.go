@@ -39,8 +39,21 @@ func InitStepdance(s *Stepdance, bind string) {
 		return
 	}
 
-	slog.Info("Starting to listen ...", "bind", bind)
-	panic(http.ListenAndServe(bind, s.sessionManager.LoadAndSave(mux)))
+	srv := &http.Server{
+		Addr:    bind,
+		Handler: s.sessionManager.LoadAndSave(mux),
+	}
+
+	go func() {
+		err := srv.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
+			panic(err)
+		}
+	}()
+
+	slog.Info("Listening ...", "bind", bind)
+
+	return srv
 }
 
 func (s *Stepdance) indexHandler(w http.ResponseWriter, r *http.Request) {
