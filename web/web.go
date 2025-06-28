@@ -69,6 +69,7 @@ func (s *Stepdance) indexHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *Stepdance) checkState(w http.ResponseWriter, r *http.Request) bool {
 	if s.sessionManager.GetString(r.Context(), "state") != r.URL.Query().Get("state") {
+		http.Error(w, "Bad state", http.StatusBadRequest)
 		s.templates.Index.ExecuteTemplate(w, "base", nil)
 		return false
 	}
