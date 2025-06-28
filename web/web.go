@@ -132,7 +132,7 @@ func (s *Stepdance) callbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	s.sessionManager.Put(r.Context(), "token", oauth2Token.AccessToken)
 	ui, err := s.OidcProvider.UserInfo(s.Ctx, s.Oauth2Config.TokenSource(s.Ctx, oauth2Token))
-	if err != nil {
+	if err != nil || ui.Subject == "" {
 		slog.Error("Failed to query userinfo", "error", err)
 		http.Error(w, "Cannot determine subject", http.StatusInternalServerError)
 		return
