@@ -5,6 +5,7 @@ go 1.24.4
 require (
 	github.com/alexedwards/scs/v2 v2.8.0
 	github.com/coreos/go-oidc/v3 v3.13.0
+	github.com/oauth2-proxy/mockoidc v0.0.0-20240214162133-caebfff84d25
 	github.com/smallstep/certificates v0.28.3
 	golang.org/x/net v0.37.0
 	golang.org/x/oauth2 v0.28.0
@@ -33,6 +34,7 @@ require (
 	github.com/go-jose/go-jose/v3 v3.0.4 // indirect
 	github.com/go-jose/go-jose/v4 v4.0.5 // indirect
 	github.com/go-sql-driver/mysql v1.8.1 // indirect
+	github.com/golang-jwt/jwt/v5 v5.2.1 // indirect
 	github.com/golang/glog v1.2.4 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
@@ -86,3 +88,6 @@ require (
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.5.1 // indirect
 	google.golang.org/protobuf v1.36.5 // indirect
 )
+
+// pending https://github.com/oauth2-proxy/mockoidc/pull/45
+replace github.com/oauth2-proxy/mockoidc => github.com/tacerus/go-mockoidc v0.0.1

@@ -17,7 +17,11 @@ type PageData struct {
 }
 
 func readTemplates() (*Templates, bool) {
+	// TODO: find root automatically instead of assuming working directory
 	tmpldir := "./web/templates/"
+	if st != nil {
+		tmpldir = "./templates/"
+	}
 	tmpls := new(Templates)
 
 	tmpls.Index = template.Must(template.ParseFiles(tmpldir+"index.html", tmpldir+"top.html", tmpldir+"base.html"))

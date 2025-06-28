@@ -21,11 +21,21 @@ type Stepdance struct {
 	Step           *cert.Step
 }
 
-func InitStepdance(s *Stepdance, bind string) {
+// these two should be in web_test.go, but "st" is currently used to change things needed for testing
+type steptest struct {
+	s       *Stepdance
+	srv     *http.Server
+	oidcsrv *http.Server
+	c       *http.Client
+}
+
+var st *steptest
+
+func InitStepdance(s *Stepdance, bind string) *http.Server {
 	s.sessionManager = newSessionManager()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", s.indexHandler)
+	mux.HandleFunc("/", s.IndexHandler)
 	mux.HandleFunc("/login", s.loginHandler)
 	mux.HandleFunc("/callback", s.callbackHandler)
 	mux.HandleFunc("/certificate/download", s.downloadHandler)
@@ -36,7 +46,7 @@ func InitStepdance(s *Stepdance, bind string) {
 	var tok bool
 	s.templates, tok = readTemplates()
 	if !tok {
-		return
+		return nil
 	}
 
 	srv := &http.Server{
@@ -56,7 +66,7 @@ func InitStepdance(s *Stepdance, bind string) {
 	return srv
 }
 
-func (s *Stepdance) indexHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Stepdance) IndexHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
 		return

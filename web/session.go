@@ -8,7 +8,9 @@ import (
 func newSessionManager() *scs.SessionManager {
 	sm := scs.New()
 	sm.Lifetime = 60 * time.Second
-	sm.Cookie.Secure = true
+	if st == nil {
+		sm.Cookie.Secure = true
+	}
 	sm.Cookie.HttpOnly = true
 	//sm.sessionManager.Cookie.SameSite = http.SameSiteStrictMode
 
