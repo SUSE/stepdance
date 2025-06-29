@@ -9,15 +9,24 @@ import (
 	"net/http/httptest"
 	"testing"
 	//"net/url"
-	"strings"
 
 	"github.com/SUSE/stepdance/cert"
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/oauth2-proxy/mockoidc"
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/oauth2"
 )
 
+const (
+	srvapp  = 0
+	srvoidc = 1
+)
+
+// performs a GET request against the live server as opposed to mocking a handler
+// returns the response object and the decoded body
 func realGet(t *testing.T, path string) (*http.Response, string) {
+	t.Helper()
+
 	if path[0:1] == "/" {
 		path = "http://localhost:9100" + path
 	}
@@ -29,15 +38,14 @@ func realGet(t *testing.T, path string) (*http.Response, string) {
 		t.Error(err)
 	}
 
-	fmt.Printf("r %+v\n", r)
+	//fmt.Printf("r %+v\n", r)
 
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		t.Error(err)
 	}
 
-	//fmt.Printf("body %s\n", b)
-
+	// for debugging the cookie jar
 	/*
 	for _, cookie := range r.Cookies() {
 		fmt.Printf("cookie in res: %s => %s on %s\n", cookie.Name, cookie.Value, cookie.Domain)
@@ -51,7 +59,46 @@ func realGet(t *testing.T, path string) (*http.Response, string) {
 	return r, string(b)
 }
 
+// performs a GET request against a mocked handler
+// returns the response object and body
+func mockGet(t *testing.T, path string, srv int) (*httptest.ResponseRecorder, string) {
+	t.Helper()
+
+	r := httptest.NewRequest(http.MethodGet, path, nil)
+	rr := httptest.NewRecorder()
+
+	switch srv {
+	case srvapp:
+		st.srv.Handler.ServeHTTP(rr, r)
+	case srvoidc:
+		st.oidcsrv.Handler.ServeHTTP(rr, r)
+	}
+
+	return rr, rr.Body.String()
+}
+
+// test for expected response code with common message
+func assertStatusEqual(t *testing.T, have int, want int) {
+	t.Helper()
+
+	assert.Equalf(t, have, want, "Have status %d, but want status %d", have, want)
+}
+
+// test and return "Location" value after realGet()
+func realLocation(t *testing.T, r *http.Response) string {
+	t.Helper()
+
+	location, err := r.Location()
+	if err != nil {
+		t.Error("missing or wrong \"Location\" header")
+	}
+
+	return location.String()
+}
+
+// setup/teardown
 func TestMain(m *testing.M) {
+	// perpare mocked OIDC provider
 	mo, err := mockoidc.Run()
 	if err != nil {
 		panic(err)
@@ -59,6 +106,8 @@ func TestMain(m *testing.M) {
 	mcfg := mo.Config()
 	defer mo.Shutdown()
 
+	// define a user which will log in
+	// (the default mockoidc user would suffice, but we set a subject name which is easier to search for)
 	mo.QueueUser(&mockoidc.MockUser{
 		Subject: "Testerites",
 	})
@@ -67,9 +116,12 @@ func TestMain(m *testing.M) {
 	st.s = new(Stepdance)
 	st.oidcsrv = mo.Server
 
-	// test/setup.sh
+	// connect to StepCA as deployed by test/setup.sh
 	st.s.Step = cert.NewStep("https://localhost:9000", "9da25f5056fdc3901a827b5e2639af48bef834f17e51a2de15e38e2f775c907e")
 	st.s.Ctx = context.Background()
+
+	// regular stepdance initialization below
+	// should align with cmd/stepdance/main.go (TODO: move this to some common function)
 
 	provider, err := oidc.NewProvider(st.s.Ctx, mo.Issuer())
 	if err != nil {
@@ -94,12 +146,14 @@ func TestMain(m *testing.M) {
 	st.srv = InitStepdance(st.s, "[::1]:9100")
 	defer st.srv.Shutdown(context.Background())
 
+	// prepare cookie jar for persistence of session cookie in authenticated tests
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		panic(err)
 	}
 
 	st.c = &http.Client{
+		// block automated redirects as we want to evaluate the response before requesting the next location
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -110,112 +164,60 @@ func TestMain(m *testing.M) {
 }
 
 func TestIndex(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rr := httptest.NewRecorder()
+	r, body := mockGet(t, "/", srvapp)
 
-	st.srv.Handler.ServeHTTP(rr, req)
-
-	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("got %d instead of %d", status, http.StatusOK)
-	}
-
-	body := rr.Body.String()
-	if strings.Contains(body, "Request certificate") {
-		t.Error("unexpected return, has \"Request certificate\" button")
-	}
-	if !strings.Contains(body, "Login") {
-		t.Error("unexpected return, misses \"Login\" button")
-	}
-	if strings.Contains(body, "Hello") {
-		t.Error("unexpected return, has logged in greeting")
-	}
+	assertStatusEqual(t, r.Code, http.StatusOK)
+	// there is assert.HTTPBodyContains, but it does not fit as it expects individual handlers, whereas we test the server as a whole
+	assert.NotContains(t, body, "Request certificate", "unexpected return, has \"Request certificate\" button")
+	assert.Contains(t, body, "Login", "unexpected return, misses \"Login\" button")
+	assert.NotContains(t, body, "Hello", "unexpected return, has logged in greeting")
 }
 
 func TestLogin(t *testing.T) {
 	// 1. initial request
 	r, _ := realGet(t, "/login")
 
-	if status := r.StatusCode; status != http.StatusFound {
-		t.Errorf("got %d instead of %d", status, http.StatusFound)
-	}
+	assertStatusEqual(t, r.StatusCode, http.StatusFound)
 
-	locationurl, err := r.Location()
-	if err != nil {
-		t.Error("missing or wrong \"Location\" header")
-	}
+	location := realLocation(t, r)
 
-	location := locationurl.String()
-
-	// TODO: properly parse URL
+	// TODO: properly parse URLs instead of Contains
 
 	// path from mock library
-	if !strings.Contains(location, "/oidc/authorize") {
-		t.Error("missing or wrong authorization redirection")
-	}
+	assert.Contains(t, location, "/oidc/authorize", "missing or wrong authorization redirection")
 
-	if !strings.Contains(location, "&response_type=code") {
-		t.Error("missing or wrong response_type")
-	}
-
-	if !strings.Contains(location, "&scope=openid+profile+email") {
-		t.Error("missing or wrong scopes")
-	}
+	assert.Contains(t, location, "&response_type=code", "missing or wrong response_type")
+	assert.Contains(t, location, "&scope=openid+profile+email", "missing or wrong scopes")
 
 	// 2. follow the redirect to the OIDC provider
-	req := httptest.NewRequest(http.MethodGet, location, nil)
-	rr := httptest.NewRecorder()
+	rr, body := mockGet(t, location, srvoidc)
 
-	st.oidcsrv.Handler.ServeHTTP(rr, req)
-
-	// if this fails, likely a problem with the provider mocking and not with the application
-	if status := rr.Code; status != http.StatusFound {
-		t.Errorf("got %d instead of %d", status, http.StatusFound)
-	}
+	// if this fails it is likely a problem with the provider mocking and not with our application
+	assertStatusEqual(t, rr.Code, http.StatusFound)
 
 	headers := rr.HeaderMap
-
 	locations, ok := headers["Location"]
 	if !ok || len(locations) != 1 {
 		t.Error("missing \"Location\" header or too many of them")
 	}
-
 	location = locations[0]
 
-	// TODO: properly parse URL
-
-	if !strings.Contains(location, "/callback") {
-		t.Error("missing or wrong callback redirection")
-	}
-
-	if !strings.Contains(location, "?code=") || !strings.Contains(location, "&state=") {
-		t.Error("wrong parameters in callback redirection")
-	}
+	assert.Contains(t, location, "/callback", "missing or wrong callback redirection")
+	assert.Contains(t, location, "?code=", "missing or wrong \"code\" parameter in callback redirection")
+	assert.Contains(t, location, "&state=", "missing or wrong \"state\" callback redirection")
 
 	// 3. follow the redirect to the service callback
 	r, _ = realGet(t, location)
 
-	if status := r.StatusCode; status != http.StatusFound {
-		t.Errorf("got %d instead of %d", status, http.StatusFound)
-	}
+	assertStatusEqual(t, r.StatusCode, http.StatusFound)
 
-	locationurl, err = r.Location()
-	if err != nil {
-		t.Error("missing or wrong \"Location\" header")
-	}
-
-	location = locationurl.String()
+	location = realLocation(t, r)
 
 	// 4. follow the redirect to the originally requested path
-	r, body := realGet(t, location)
+	r, body = realGet(t, location)
 
-	if status := r.StatusCode; status != http.StatusOK {
-		t.Errorf("got %d instead of %d", status, http.StatusOK)
-	}
+	assertStatusEqual(t, r.StatusCode, http.StatusOK)
 
-	if strings.Contains(body, "Login") {
-		t.Error("unexpected return, has \"Login\" button")
-	}
-	if !strings.Contains(body, "Hello, Testerites") {
-		t.Error("unexpected return, missing greeting")
-	}
+	assert.NotContains(t, body, "Login", "unexpected return, has \"Login\" button")
+	assert.Contains(t, body, "Hello, Testerites", "unexpected return, missing greeting")
 }

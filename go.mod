@@ -7,6 +7,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.13.0
 	github.com/oauth2-proxy/mockoidc v0.0.0-20240214162133-caebfff84d25
 	github.com/smallstep/certificates v0.28.3
+	github.com/stretchr/testify v1.10.0
 	golang.org/x/net v0.37.0
 	golang.org/x/oauth2 v0.28.0
 )
@@ -24,6 +25,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.5 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dgraph-io/badger v1.6.2 // indirect
 	github.com/dgraph-io/badger/v2 v2.2007.4 // indirect
 	github.com/dgraph-io/ristretto v0.1.0 // indirect
@@ -57,6 +59,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/newrelic/go-agent/v3 v3.37.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_golang v1.21.1 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
@@ -87,6 +90,7 @@ require (
 	google.golang.org/grpc v1.71.0 // indirect
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.5.1 // indirect
 	google.golang.org/protobuf v1.36.5 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 // pending https://github.com/oauth2-proxy/mockoidc/pull/45
