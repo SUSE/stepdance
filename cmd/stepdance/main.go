@@ -81,4 +81,6 @@ func main() {
 	signal.Notify(cs, os.Interrupt)
 
 	<-cs
+
+	slog.Info("Shutting down ...")
 }
