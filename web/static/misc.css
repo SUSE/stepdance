@@ -1,0 +1,49 @@
+.navbar {
+  height: 3em;
+  padding: 0;
+  color: white;
+  background-color: #0c322c;
+}
+
+.navbar-brand {
+  margin-left: 1em;
+  padding-top: 5px;
+}
+
+.navbar-text {
+  position: absolute;
+  right: 0;
+  margin-right: 10px;
+  margin-top: 10px;
+}
+
+.content {
+  margin-top: 5px;
+}
+
+.c1-btn {
+  color: inherit;
+}
+
+.navbar-end-line {
+  display: flex;
+  height: 8px;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  z-index: 1031; }
+
+.header-end-line-persimmon {
+  background-color: #FE7C3F;
+  width: 25%; }
+
+.header-end-line-green {
+  background-color: #30BA78;
+  width: 45%; }
+
+.header-end-line-waterhole-blue {
+  background-color: #2453ff;
+  width: 10%; }
+
+.header-end-line-mint {
+  background-color: #90ebcd;
+  width: 20%; }
