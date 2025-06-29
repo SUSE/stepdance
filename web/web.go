@@ -31,6 +31,13 @@ type steptest struct {
 
 var st *steptest
 
+const (
+	SD_ERR_MISC  = 0  // internal issue
+	SD_ERR_CODE  = 1  // no or unexpected code value in session
+	SD_ERR_STATE = 2  // no or unexpected state value in session
+	SD_ERR_TOKEN = 3  // no or unexpected token value in session
+)
+
 func InitStepdance(s *Stepdance, bind string) *http.Server {
 	s.sessionManager = newSessionManager()
 
@@ -66,6 +73,28 @@ func InitStepdance(s *Stepdance, bind string) *http.Server {
 	return srv
 }
 
+func (s *Stepdance) errorHandler(w http.ResponseWriter, r *http.Request, sdErr int, text string) {
+	p := new(PageData)
+	if text != "" {
+		p = &PageData{Error: text}
+	}
+
+	switch sdErr {
+	case SD_ERR_MISC:
+		w.WriteHeader(http.StatusInternalServerError)
+		s.templates.InternalError.ExecuteTemplate(w, "base", p)
+	case SD_ERR_CODE:
+		w.WriteHeader(http.StatusBadRequest)
+		s.templates.MissingCode.ExecuteTemplate(w, "base", p)
+	case SD_ERR_STATE:
+		w.WriteHeader(http.StatusBadRequest)
+		s.templates.BadState.ExecuteTemplate(w, "base", p)
+	case SD_ERR_TOKEN:
+		w.WriteHeader(http.StatusBadRequest)
+		s.templates.MissingToken.ExecuteTemplate(w, "base", p)
+	}
+}
+
 func (s *Stepdance) IndexHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
@@ -79,8 +108,7 @@ func (s *Stepdance) IndexHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *Stepdance) checkState(w http.ResponseWriter, r *http.Request) bool {
 	if s.sessionManager.GetString(r.Context(), "state") != r.URL.Query().Get("state") {
-		http.Error(w, "Bad state", http.StatusBadRequest)
-		s.templates.Index.ExecuteTemplate(w, "base", nil)
+		s.errorHandler(w, r, SD_ERR_STATE, "")
 		return false
 	}
 
@@ -90,12 +118,14 @@ func (s *Stepdance) checkState(w http.ResponseWriter, r *http.Request) bool {
 func (s *Stepdance) loginHandler(w http.ResponseWriter, r *http.Request) {
 	state, err := randString(16)
 	if err != nil {
-		http.Error(w, "Internal error", http.StatusInternalServerError)
+		slog.Error("randString() failed", "error", err)
+		s.errorHandler(w, r, SD_ERR_MISC, "")
 		return
 	}
 	nonce, err := randString(16)
 	if err != nil {
-		http.Error(w, "Internal error", http.StatusInternalServerError)
+		slog.Error("randString() failed", "error", err)
+		s.errorHandler(w, r, SD_ERR_MISC, "")
 		return
 	}
 
@@ -113,39 +143,43 @@ func (s *Stepdance) callbackHandler(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 
 	if code == "" {
-		s.templates.MissingCode.ExecuteTemplate(w, "base", nil)
+		s.errorHandler(w, r, SD_ERR_CODE, "")
 		return
 	}
 
 	oauth2Token, err := s.Oauth2Config.Exchange(s.Ctx, code)
 	if err != nil {
-		http.Error(w, "Token exchange failed: "+err.Error(), http.StatusInternalServerError)
+		slog.Error("Token exchange failed", "error", err)
+		s.errorHandler(w, r, SD_ERR_MISC, "Token exchange failed.")
 		return
 	}
 
 	rawIDToken, ok := oauth2Token.Extra("id_token").(string)
 	if !ok {
-		http.Error(w, "No id_token field in oauth2 token.", http.StatusInternalServerError)
+		slog.Error("No id_token field in oauth2 token")
+		s.errorHandler(w, r, SD_ERR_MISC, "Missing id_token field.")
 		return
 	}
 
 	idToken, err := s.Verifier.Verify(s.Ctx, rawIDToken)
 	if err != nil {
-		http.Error(w, "ID token verification failed: "+err.Error(), http.StatusInternalServerError)
+		slog.Error("ID token verification failed", "error", err)
+		s.errorHandler(w, r, SD_ERR_MISC, "ID token verification failed.")
 		return
 	}
 
 	nonce := s.sessionManager.GetString(r.Context(), "nonce")
 	if idToken.Nonce != nonce {
-		http.Error(w, "Nonce does not match", http.StatusBadRequest)
+		slog.Error("Nonce does not match")
+		s.errorHandler(w, r, SD_ERR_MISC, "Nonce verification failed.")
 		return
 	}
 
 	s.sessionManager.Put(r.Context(), "token", oauth2Token.AccessToken)
 	ui, err := s.OidcProvider.UserInfo(s.Ctx, s.Oauth2Config.TokenSource(s.Ctx, oauth2Token))
 	if err != nil || ui.Subject == "" {
-		slog.Error("Failed to query userinfo", "error", err)
-		http.Error(w, "Cannot determine subject", http.StatusInternalServerError)
+		slog.Error("Failed to query userinfo for subject", "error", err)
+		s.errorHandler(w, r, SD_ERR_MISC, "Subject query failed.")
 		return
 	}
 
@@ -168,14 +202,15 @@ func (s *Stepdance) certReqHandler(w http.ResponseWriter, r *http.Request) {
 
 	accessToken := s.sessionManager.GetString(r.Context(), "token")
 	if accessToken == "" {
-		slog.Debug("certificate request attempted without token")
-		s.templates.MissingCode.ExecuteTemplate(w, "base", nil)
+		slog.Debug("Certificate request attempted without token")
+		s.errorHandler(w, r, SD_ERR_TOKEN, "")
 		return
 	}
 
 	c, k := s.Step.MakeCertAndKey(accessToken)
 	if c == nil || k == nil {
-		http.Error(w, "Certificate or key generation failed", http.StatusBadRequest)
+		slog.Error("Generated certificate or key is empty")
+		s.errorHandler(w, r, SD_ERR_MISC, "Certificate/key generation failed.")
 		return
 	}
 
@@ -206,7 +241,8 @@ func (s *Stepdance) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if data == nil || !ok {
-		http.Error(w, "No data", http.StatusInternalServerError)
+		slog.Error("Incomplete data to offer for download")
+		s.errorHandler(w, r, SD_ERR_MISC, "No download data.")
 		return
 	}
 

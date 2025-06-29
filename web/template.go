@@ -5,15 +5,18 @@ import (
 )
 
 type Templates struct {
-	Index              *template.Template
-	StateMismatch      *template.Template
-	MissingCode        *template.Template
+	BadState           *template.Template
 	CertificateRequest *template.Template
+	Index              *template.Template
+	InternalError      *template.Template
+	MissingCode        *template.Template
+	MissingToken       *template.Template
 }
 
 type PageData struct {
 	Subject string
 	State   string
+	Error   string
 }
 
 func readTemplates() (*Templates, bool) {
@@ -24,10 +27,12 @@ func readTemplates() (*Templates, bool) {
 	}
 	tmpls := new(Templates)
 
-	tmpls.Index = template.Must(template.ParseFiles(tmpldir+"index.html", tmpldir+"top.html", tmpldir+"base.html"))
-	tmpls.StateMismatch = template.Must(template.ParseFiles(tmpldir+"state_mismatch.html", tmpldir+"top.html", tmpldir+"base.html"))
-	tmpls.MissingCode = template.Must(template.ParseFiles(tmpldir+"missing_code.html", tmpldir+"top.html", tmpldir+"base.html"))
+	tmpls.BadState = template.Must(template.ParseFiles(tmpldir+"bad_state.html", tmpldir+"top.html", tmpldir+"base.html"))
 	tmpls.CertificateRequest = template.Must(template.ParseFiles(tmpldir+"certificate_request.html", tmpldir+"top.html", tmpldir+"base.html"))
+	tmpls.Index = template.Must(template.ParseFiles(tmpldir+"index.html", tmpldir+"top.html", tmpldir+"base.html"))
+	tmpls.InternalError = template.Must(template.ParseFiles(tmpldir+"internal_error.html", tmpldir+"top.html", tmpldir+"base.html"))
+	tmpls.MissingCode = template.Must(template.ParseFiles(tmpldir+"missing_code.html", tmpldir+"top.html", tmpldir+"base.html"))
+	tmpls.MissingToken = template.Must(template.ParseFiles(tmpldir+"missing_token.html", tmpldir+"top.html", tmpldir+"base.html"))
 
 	return tmpls, true
 }
