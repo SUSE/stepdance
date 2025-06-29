@@ -7,7 +7,7 @@ import (
 
 func newSessionManager() *scs.SessionManager {
 	sm := scs.New()
-	sm.Lifetime = 60 * time.Second
+	sm.Lifetime = 5 * time.Minute
 	if st == nil {
 		sm.Cookie.Secure = true
 	}
