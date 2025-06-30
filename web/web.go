@@ -135,6 +135,24 @@ func (s *Stepdance) tokenValidator(w http.ResponseWriter, r *http.Request) (*oau
 	return token, true
 }
 
+func (s *Stepdance) setOrigPath(r *http.Request) {
+	path := r.URL.Path
+	if r.URL.RawQuery != "" {
+		path = path + "?" + r.URL.RawQuery
+	}
+	slog.Debug("setting origPath", "path", path)
+	s.sessionManager.Put(r.Context(), "origPath", path)
+}
+
+func (s *Stepdance) getOrigPath(r *http.Request) string {
+	path := s.sessionManager.GetString(r.Context(), "origPath")
+	if path == "" {
+		path = "/"
+	}
+
+	return path
+}
+
 func (s *Stepdance) IndexHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
@@ -232,16 +250,12 @@ func (s *Stepdance) callbackHandler(w http.ResponseWriter, r *http.Request) {
 	slog.Info("Authenticated user", "subject", ui.Subject)
 	s.sessionManager.Put(r.Context(), "subject", ui.Subject)
 
-	path := s.sessionManager.GetString(r.Context(), "origPath")
-	if path == "" {
-		path = "/"
-	}
-
-	http.Redirect(w, r, path, http.StatusFound)
+	http.Redirect(w, r, s.getOrigPath(r), http.StatusFound)
 }
 
 func (s *Stepdance) certReqHandler(w http.ResponseWriter, r *http.Request) {
-	s.sessionManager.Put(r.Context(), "origPath", "/certificate/request")
+	s.setOrigPath(r)
+
 	// TOOD: validate session?
 	// currently it will just fail if a bogus token is passed, better would be to return early
 
@@ -294,7 +308,7 @@ func (s *Stepdance) certReqHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Stepdance) certRevHandler(w http.ResponseWriter, r *http.Request) {
-	s.sessionManager.Put(r.Context(), "origPath", "/certificate/revoke")
+	s.setOrigPath(r)
 
 	// TODO: better session validation?
 
@@ -324,7 +338,7 @@ func (s *Stepdance) certRevHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Stepdance) downloadHandler(w http.ResponseWriter, r *http.Request) {
-	s.sessionManager.Put(r.Context(), "origPath", "/certificate/download")
+	s.setOrigPath(r)
 
 	if !s.checkState(w, r) {
 		return
