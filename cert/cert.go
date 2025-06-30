@@ -10,8 +10,9 @@ import (
 )
 
 type DbCertificate struct {
-	CN     string
-	Serial string // some sort of integer might make more sense but the default big.Int was difficult to read
+	CN      string
+	Serial  string // some sort of integer might make more sense but the default big.Int was difficult to read
+	Revoked bool
 }
 
 type DbCertificates []*DbCertificate
@@ -38,7 +39,15 @@ func (d *DbCertificates) Filter(cn string, limit int) DbCertificates {
 }
 
 func (s *Step) GetCertificates() DbCertificates {
-	rows, err := s.db.Query("SELECT nvalue FROM x509_certs")
+	rows, err := s.db.Query(`
+		SELECT
+			convert_from(x.nkey, 'utf-8'),
+			convert_from(rx.nkey, 'utf-8') IS NOT NULL,
+			x.nvalue
+			FROM x509_certs AS x
+			LEFT JOIN revoked_x509_certs AS rx
+			ON x.nkey = rx.nkey
+	`)
 	if err != nil {
 		slog.Error("Database query failed", "error", err)
 		return nil
@@ -48,21 +57,31 @@ func (s *Step) GetCertificates() DbCertificates {
 	out := DbCertificates{}
 
 	for rows.Next() {
-		var rawCrt []byte
+		var (
+			serial  string
+			revoked bool
+			rawCrt  []byte
+		)
 
-		if err := rows.Scan(&rawCrt); err != nil {
-			slog.Error("scan failed", "err", err)
+		if err := rows.Scan(&serial, &revoked, &rawCrt); err != nil {
+			slog.Error("scan failed", "error", err)
 			return nil
 		}
 
 		crt, cerr := x509.ParseCertificate(rawCrt)
 		if cerr != nil {
-			slog.Error("certificate parsing failed", "err", err)
+			slog.Error("certificate parsing failed", "error", err)
+		}
+
+		if serial != crt.SerialNumber.String() {
+			slog.Error("corrupted certificate (serial mismatch) in database, skipping", "error", err)
+			continue
 		}
 
 		c := DbCertificate{
-			CN:     crt.Subject.CommonName,
-			Serial: crt.SerialNumber.String(),
+			CN:      crt.Subject.CommonName,
+			Serial:  crt.SerialNumber.String(),
+			Revoked: revoked,
 		}
 
 		out = append(out, &c)
