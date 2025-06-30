@@ -14,12 +14,30 @@ type DbCertificate struct {
 	Serial string // some sort of integer might make more sense but the default big.Int was difficult to read
 }
 
-type DbCertificates struct {
-	Certificates []DbCertificate
+type DbCertificates []*DbCertificate
+
+type DbCertificateCache struct {
+	Certificates DbCertificates
 	lastUpdate   time.Time
 }
 
-func (s *Step) GetCertificates() []DbCertificate {
+func (d *DbCertificates) Filter(cn string, limit int) DbCertificates {
+	out := DbCertificates{}
+
+	for i, c := range *d {
+		if limit > 0 && i > limit {
+			break
+		}
+
+		if c.CN == cn {
+			out = append(out, c)
+		}
+	}
+
+	return out
+}
+
+func (s *Step) GetCertificates() DbCertificates {
 	rows, err := s.db.Query("SELECT nvalue FROM x509_certs")
 	if err != nil {
 		slog.Error("Database query failed", "error", err)
@@ -27,7 +45,7 @@ func (s *Step) GetCertificates() []DbCertificate {
 	}
 	defer rows.Close()
 
-	out := []DbCertificate{}
+	out := DbCertificates{}
 
 	for rows.Next() {
 		var rawCrt []byte
@@ -47,7 +65,7 @@ func (s *Step) GetCertificates() []DbCertificate {
 			Serial: crt.SerialNumber.String(),
 		}
 
-		out = append(out, c)
+		out = append(out, &c)
 	}
 
 	return out
@@ -61,7 +79,7 @@ func (s *Step) RefreshCertificates() {
 		return
 	}
 
-	newData := new(DbCertificates)
+	newData := new(DbCertificateCache)
 
 	newData.Certificates = s.GetCertificates()
 	if newData.Certificates == nil {

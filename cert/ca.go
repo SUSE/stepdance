@@ -11,7 +11,7 @@ import (
 type Step struct {
 	client       *ca.Client
 	db           *sql.DB
-	Certificates atomic.Pointer[DbCertificates]
+	Certificates atomic.Pointer[DbCertificateCache]
 }
 
 func NewStep(url string, hash string, dburl string) *Step {
