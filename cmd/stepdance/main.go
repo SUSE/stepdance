@@ -38,6 +38,18 @@ func main() {
 
 	slog.Info("Booting Stepdance ...")
 
+	var td *time.Duration
+	if c.CaDbRefresh == "" {
+		tdtmp := (5 * time.Minute)
+		td = &tdtmp
+	} else {
+		td = parseConfigTime(c.CaDbRefresh)
+	}
+
+	if td == nil {
+		os.Exit(1)
+	}
+
 	s := new(web.Stepdance)
 
 	s.Step = cert.NewStep(c.CaUrl, c.CaHash, c.CaDbUrl)
@@ -80,7 +92,7 @@ func main() {
 	srv := web.InitStepdance(s, bind)
 	defer srv.Shutdown(context.Background())
 
-	tt := time.Tick(5 * time.Minute)
+	tt := time.Tick(*td)
 
 main:
 	for {
