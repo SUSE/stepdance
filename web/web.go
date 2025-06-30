@@ -32,10 +32,11 @@ type steptest struct {
 var st *steptest
 
 const (
-	SD_ERR_MISC  = 0  // internal issue
-	SD_ERR_CODE  = 1  // no or unexpected code value in session
-	SD_ERR_STATE = 2  // no or unexpected state value in session
-	SD_ERR_TOKEN = 3  // no or unexpected token value in session
+	SD_ERR_MISC  = 0 // internal issue
+	SD_ERR_CODE  = 1 // no or unexpected code value in session
+	SD_ERR_STATE = 2 // no or unexpected state value in session
+	SD_ERR_TOKEN = 3 // no or unexpected token value in session
+	SD_ERR_PARAM = 4 // missing query parameters
 )
 
 func InitStepdance(s *Stepdance, bind string) *http.Server {
@@ -47,6 +48,7 @@ func InitStepdance(s *Stepdance, bind string) *http.Server {
 	mux.HandleFunc("/callback", s.callbackHandler)
 	mux.HandleFunc("/certificate/download", s.downloadHandler)
 	mux.HandleFunc("/certificate/request", s.certReqHandler)
+	mux.HandleFunc("/certificate/revoke", s.certRevHandler)
 
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./web/static"))))
 
@@ -86,6 +88,9 @@ func (s *Stepdance) errorHandler(w http.ResponseWriter, r *http.Request, sdErr i
 	case SD_ERR_CODE:
 		w.WriteHeader(http.StatusBadRequest)
 		s.templates.MissingCode.ExecuteTemplate(w, "base", p)
+	case SD_ERR_PARAM:
+		w.WriteHeader(http.StatusBadRequest)
+		s.templates.MissingParameter.ExecuteTemplate(w, "base", p)
 	case SD_ERR_STATE:
 		w.WriteHeader(http.StatusBadRequest)
 		s.templates.BadState.ExecuteTemplate(w, "base", p)
@@ -102,7 +107,13 @@ func (s *Stepdance) IndexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Add("Content-Type", "text/html")
-	p := PageData{Subject: s.sessionManager.GetString(r.Context(), "subject")}
+
+	subject := s.sessionManager.GetString(r.Context(), "subject")
+	p := PageData{Subject: subject}
+	certCache := s.Step.Certificates.Load()
+	if subject != "" && certCache != nil {
+		p.Certificates = s.Step.Certificates.Load().Certificates.Filter(subject, "", 0)
+	}
 	s.templates.Index.ExecuteTemplate(w, "base", p)
 }
 
@@ -219,6 +230,36 @@ func (s *Stepdance) certReqHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "text/html")
 	p := PageData{State: s.sessionManager.GetString(r.Context(), "state")}
 	s.templates.CertificateRequest.ExecuteTemplate(w, "base", p)
+}
+
+func (s *Stepdance) certRevHandler(w http.ResponseWriter, r *http.Request) {
+	s.sessionManager.Put(r.Context(), "origPath", "/certificate/revoke")
+
+	// TODO: better session validation?
+
+	accessToken := s.sessionManager.PopString(r.Context(), "token")
+	if accessToken == "" {
+		slog.Debug("Certificate revocation attempted without token")
+		s.errorHandler(w, r, SD_ERR_TOKEN, "")
+		return
+	}
+
+	serial := r.URL.Query().Get("serial")
+
+	if serial == "" {
+		slog.Debug("Certificate revocation attempted without serial")
+		s.errorHandler(w, r, SD_ERR_PARAM, "")
+		return
+	}
+
+	ok := s.Step.RevokeCert(serial, accessToken)
+
+	if !ok {
+		s.errorHandler(w, r, SD_ERR_MISC, "Revocation failed.")
+		return
+	}
+
+	http.Redirect(w, r, "/", http.StatusFound)
 }
 
 func (s *Stepdance) downloadHandler(w http.ResponseWriter, r *http.Request) {

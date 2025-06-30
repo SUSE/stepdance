@@ -2,6 +2,8 @@ package web
 
 import (
 	"html/template"
+
+	"github.com/SUSE/stepdance/cert"
 )
 
 type Templates struct {
@@ -10,13 +12,15 @@ type Templates struct {
 	Index              *template.Template
 	InternalError      *template.Template
 	MissingCode        *template.Template
+	MissingParameter   *template.Template
 	MissingToken       *template.Template
 }
 
 type PageData struct {
-	Subject string
-	State   string
-	Error   string
+	Certificates cert.DbCertificates
+	Subject      string
+	State        string
+	Error        string
 }
 
 func readTemplates() (*Templates, bool) {
@@ -32,6 +36,7 @@ func readTemplates() (*Templates, bool) {
 	tmpls.Index = template.Must(template.ParseFiles(tmpldir+"index.html", tmpldir+"top.html", tmpldir+"base.html"))
 	tmpls.InternalError = template.Must(template.ParseFiles(tmpldir+"internal_error.html", tmpldir+"top.html", tmpldir+"base.html"))
 	tmpls.MissingCode = template.Must(template.ParseFiles(tmpldir+"missing_code.html", tmpldir+"top.html", tmpldir+"base.html"))
+	tmpls.MissingParameter = template.Must(template.ParseFiles(tmpldir+"missing_parameter.html", tmpldir+"top.html", tmpldir+"base.html"))
 	tmpls.MissingToken = template.Must(template.ParseFiles(tmpldir+"missing_token.html", tmpldir+"top.html", tmpldir+"base.html"))
 
 	return tmpls, true

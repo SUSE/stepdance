@@ -47,3 +47,8 @@
 .header-end-line-mint {
   background-color: #90ebcd;
   width: 20%; }
+
+table.overview {
+  border-spacing: 10px;
+  margin-bottom: 30px;
+}

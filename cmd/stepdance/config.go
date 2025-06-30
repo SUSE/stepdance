@@ -16,6 +16,7 @@ type Config struct {
 	CaUrl        string
 	CaDbUrl      string
 	CaDbRefresh  string
+	CaPass       string
 	CaHash       string
 	ClientId     string
 	ClientSecret string

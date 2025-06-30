@@ -4,12 +4,14 @@ import (
 	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/pem"
+	"github.com/smallstep/certificates/api"
 	"github.com/smallstep/certificates/ca"
 	"log/slog"
 	"time"
 )
 
 type DbCertificate struct {
+	Raw     x509.Certificate
 	CN      string
 	Serial  string // some sort of integer might make more sense but the default big.Int was difficult to read
 	Revoked bool
@@ -22,7 +24,7 @@ type DbCertificateCache struct {
 	lastUpdate   time.Time
 }
 
-func (d *DbCertificates) Filter(cn string, limit int) DbCertificates {
+func (d *DbCertificates) Filter(cn string, serial string, limit int) DbCertificates {
 	out := DbCertificates{}
 
 	for i, c := range *d {
@@ -30,7 +32,7 @@ func (d *DbCertificates) Filter(cn string, limit int) DbCertificates {
 			break
 		}
 
-		if c.CN == cn {
+		if (cn != "" && c.CN == cn) || (serial != "" && c.Serial == serial) {
 			out = append(out, c)
 		}
 	}
@@ -79,6 +81,7 @@ func (s *Step) GetCertificates() DbCertificates {
 		}
 
 		c := DbCertificate{
+			Raw:     *crt,
 			CN:      crt.Subject.CommonName,
 			Serial:  crt.SerialNumber.String(),
 			Revoked: revoked,
@@ -143,4 +146,34 @@ func (s *Step) MakeCertAndKey(token string) ([]byte, []byte) {
 	pemKey := pem.EncodeToMemory(block)
 
 	return cert.Certificate[0], pemKey
+}
+
+func (s *Step) RevokeCert(serial string, ott string) bool {
+	request := &api.RevokeRequest{
+		Serial:     serial,
+		OTT:        s.Token(serial),
+		ReasonCode: 1,
+		Passive:    true, // TODO
+	}
+
+	err := request.Validate()
+	if err != nil {
+		slog.Error("certificate revocation request construction failed", "error", err)
+		return false
+	}
+
+	result, err := s.client.Revoke(request, nil)
+	if err != nil {
+		slog.Error("certificate revocation failed", "error", err)
+		return false
+	}
+
+	certs := s.Certificates.Load().Certificates.Filter("", serial, 0)
+	for i, _ := range certs {
+		certs[i].Revoked = true
+	}
+
+	slog.Info("certificate revoked", "status", result)
+
+	return true
 }
