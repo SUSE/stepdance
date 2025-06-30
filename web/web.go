@@ -196,11 +196,10 @@ func (s *Stepdance) callbackHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *Stepdance) certReqHandler(w http.ResponseWriter, r *http.Request) {
 	s.sessionManager.Put(r.Context(), "origPath", "/certificate/request")
-
 	// TOOD: validate session?
 	// currently it will just fail if a bogus token is passed, better would be to return early
 
-	accessToken := s.sessionManager.GetString(r.Context(), "token")
+	accessToken := s.sessionManager.PopString(r.Context(), "token")
 	if accessToken == "" {
 		slog.Debug("Certificate request attempted without token")
 		s.errorHandler(w, r, SD_ERR_TOKEN, "")
