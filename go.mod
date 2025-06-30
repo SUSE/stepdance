@@ -94,7 +94,7 @@ require (
 )
 
 // pending https://github.com/oauth2-proxy/mockoidc/pull/45
-replace github.com/oauth2-proxy/mockoidc => github.com/tacerus/go-mockoidc v0.0.1
+replace github.com/oauth2-proxy/mockoidc => github.com/tacerus/go-mockoidc v0.0.2
 
 // pending https://github.com/smallstep/certificates/issues/2323
 replace github.com/smallstep/certificates v0.28.3 => /home/georg/Work/git/smallstep-certificates

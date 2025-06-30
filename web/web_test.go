@@ -2,13 +2,18 @@ package web
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"testing"
 	//"net/url"
+	"os/exec"
+	"strings"
 
 	"github.com/SUSE/stepdance/cert"
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -99,7 +104,21 @@ func realLocation(t *testing.T, r *http.Response) string {
 // setup/teardown
 func TestMain(m *testing.M) {
 	// perpare mocked OIDC provider
-	mo, err := mockoidc.Run()
+	// (manually instead of .Run() due to need for static port)
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 1024)
+	if err != nil {
+		panic(err)
+	}
+	mo, err := mockoidc.NewServer(rsaKey)
+	if err != nil {
+		panic(err)
+	}
+	ln, err := net.Listen("tcp", "localhost:9200")
+	if err != nil {
+		panic(err)
+	}
+	mo.Start(ln, nil)
+	//mo, err := mockoidc.Run()
 	if err != nil {
 		panic(err)
 	}
@@ -117,7 +136,12 @@ func TestMain(m *testing.M) {
 	st.oidcsrv = mo.Server
 
 	// connect to StepCA as deployed by test/setup.sh
-	st.s.Step = cert.NewStep("https://localhost:9000", "9da25f5056fdc3901a827b5e2639af48bef834f17e51a2de15e38e2f775c907e")
+	st.s.Step = cert.NewStep(
+		"https://localhost:9000",
+		"9da25f5056fdc3901a827b5e2639af48bef834f17e51a2de15e38e2f775c907e",
+		"postgresql://step:step@localhost/step",
+		"ThisIsDumb",
+	)
 	st.s.Ctx = context.Background()
 
 	// regular stepdance initialization below
@@ -146,6 +170,29 @@ func TestMain(m *testing.M) {
 	st.srv = InitStepdance(st.s, "[::1]:9100")
 	defer st.srv.Shutdown(context.Background())
 
+	// very ugly, refactor to Go code would be nice but then again this works for the test purposes ...
+	cmd := exec.Command("podman", "exec", "t-stepdance-stepca", "step", "ca", "provisioner", "list")
+	output, err := cmd.CombinedOutput()
+	outstr := string(output)
+	if err != nil {
+		fmt.Printf("command: %s\noutput: %s", cmd.String(), outstr)
+		panic(err)
+	}
+	if strings.Contains(outstr, "OIDC") {
+		cmd := exec.Command("podman", "exec", "t-stepdance-stepca", "step", "ca", "provisioner", "remove", "OIDC", "--admin-provisioner=Admin JWK", "--admin-name=step", "--admin-password-file=provisioner_password")
+		output, err := cmd.CombinedOutput()
+		fmt.Printf("command: %s\noutput: %s", cmd.String(), output)
+		if err != nil {
+			panic(err)
+		}
+	}
+	cmd = exec.Command("podman", "exec", "t-stepdance-stepca", "step", "ca", "provisioner", "add", "OIDC", "--type=oidc", "--client-id="+mcfg.ClientID, "--client-secret="+mcfg.ClientSecret, "--configuration-endpoint="+mo.DiscoveryEndpoint(), "--domain=localhost", "--ssh=false", "--disable-smallstep-extensions", "--admin-provisioner=Admin JWK", "--admin-name=step", "--admin-password-file=provisioner_password")
+	output, err = cmd.CombinedOutput()
+	fmt.Printf("command: %s\noutput: %s", cmd.String(), output)
+	if err != nil {
+		panic(err)
+	}
+
 	// prepare cookie jar for persistence of session cookie in authenticated tests
 	jar, err := cookiejar.New(nil)
 	if err != nil {
@@ -163,7 +210,7 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
-func TestIndex(t *testing.T) {
+func TestIndexAnonymous(t *testing.T) {
 	r, body := mockGet(t, "/", srvapp)
 
 	assertStatusEqual(t, r.Code, http.StatusOK)
@@ -190,7 +237,7 @@ func TestLogin(t *testing.T) {
 	assert.Contains(t, location, "&scope=openid+profile+email", "missing or wrong scopes")
 
 	// 2. follow the redirect to the OIDC provider
-	rr, body := mockGet(t, location, srvoidc)
+	rr, _ := mockGet(t, location, srvoidc)
 
 	// if this fails it is likely a problem with the provider mocking and not with our application
 	assertStatusEqual(t, rr.Code, http.StatusFound)
@@ -214,10 +261,38 @@ func TestLogin(t *testing.T) {
 	location = realLocation(t, r)
 
 	// 4. follow the redirect to the originally requested path
-	r, body = realGet(t, location)
+	r, _ = realGet(t, location)
+
+	assertStatusEqual(t, r.StatusCode, http.StatusOK)
+}
+
+func TestIndexAuthenticatedWithoutCerts(t *testing.T) {
+	r, body := realGet(t, "/")
 
 	assertStatusEqual(t, r.StatusCode, http.StatusOK)
 
 	assert.NotContains(t, body, "Login", "unexpected return, has \"Login\" button")
 	assert.Contains(t, body, "Hello, Testerites", "unexpected return, missing greeting")
+	assert.NotContains(t, body, "<table class=\"overview\">", "unexpected return, certificate table without certificates")
+	assert.Contains(t, body, "Request certificate", "unexpected return, missing \"Request certificate\" button")
+}
+
+func TestRequestCert(t *testing.T) {
+	r, body := realGet(t, "/certificate/request")
+
+	assertStatusEqual(t, r.StatusCode, http.StatusOK)
+
+	assert.Contains(t, body, "Download certificate", "missing \"Download certificate\" button")
+	assert.Contains(t, body, "Download private key", "missing \"Download private key\" button")
+}
+
+func TestIndexAuthenticatedWithCerts(t *testing.T) {
+	r, body := realGet(t, "/")
+
+	assertStatusEqual(t, r.StatusCode, http.StatusOK)
+
+	assert.NotContains(t, body, "Login", "unexpected return, has \"Login\" button")
+	assert.Contains(t, body, "Hello, Testerites", "unexpected return, missing greeting")
+	assert.Contains(t, body, "<table class=\"overview\">", "unexpected return, missing certificate table")
+	assert.Contains(t, body, "Request certificate", "unexpected return, missing \"Request certificate\" button")
 }

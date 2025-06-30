@@ -13,9 +13,8 @@
 		"format": "text"
 	},
 	"db": {
-		"type": "badgerv2",
-		"dataSource": "/home/step/db",
-		"badgerFileLoadingMode": ""
+		"type": "postgresql",
+		"dataSource": "postgresql://step:step@localhost/step"
 	},
 	"authority": {
 		"enableAdmin": true
