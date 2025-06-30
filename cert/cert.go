@@ -145,6 +145,8 @@ func (s *Step) MakeCertAndKey(token string) ([]byte, []byte) {
 	}
 	pemKey := pem.EncodeToMemory(block)
 
+	s.RefreshCertificates()
+
 	return cert.Certificate[0], pemKey
 }
 
