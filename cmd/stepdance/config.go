@@ -14,6 +14,7 @@ type Config struct {
 	BindAddress  string
 	BindPort     int
 	CaUrl        string
+	CaDbUrl      string
 	CaHash       string
 	ClientId     string
 	ClientSecret string

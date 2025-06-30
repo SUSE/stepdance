@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/net/context"
@@ -39,7 +40,7 @@ func main() {
 
 	s := new(web.Stepdance)
 
-	s.Step = cert.NewStep(c.CaUrl, c.CaHash)
+	s.Step = cert.NewStep(c.CaUrl, c.CaHash, c.CaDbUrl)
 
 	s.Ctx = context.Background()
 
@@ -74,13 +75,26 @@ func main() {
 	slog.Debug("Initialization sequence complete, starting web server ...")
 
 	cs := make(chan os.Signal, 1)
+	signal.Notify(cs, os.Interrupt)
 
 	srv := web.InitStepdance(s, bind)
 	defer srv.Shutdown(context.Background())
 
-	signal.Notify(cs, os.Interrupt)
+	tt := time.Tick(5 * time.Minute)
 
-	<-cs
+main:
+	for {
+		select {
+		case <-cs:
+			slog.Debug("Received interrupt")
+			break main
+		case <-tt:
+			slog.Debug("Tick")
+			if c.CaDbUrl != "" {
+				s.Step.RefreshCertificates()
+			}
+		}
+	}
 
 	slog.Info("Shutting down ...")
 }

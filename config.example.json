@@ -6,6 +6,8 @@
 		"BindPort": 5556,
 		// URL the StepCA server is reachable under
 		"CaUrl": "https://localhost:9000",
+		// URL the PostgreSQL server housing the StepCA database is reachable under
+		"CaDbUrl": "postgresql://step:step@localhost/step",
 		// SHA256 hash of the root CA certificate used by the StepCA server
 		"CaHash": "9da25f5056fdc3901a827b5e2639af48bef834f17e51a2de15e38e2f775c907e",
 		// Oauth2 client ID
