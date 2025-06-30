@@ -86,7 +86,7 @@ func mockGet(t *testing.T, path string, srv int) (*httptest.ResponseRecorder, st
 func assertStatusEqual(t *testing.T, have int, want int) {
 	t.Helper()
 
-	assert.Equalf(t, have, want, "Have status %d, but want status %d", have, want)
+	assert.Equalf(t, want, have, "Have status %d, but want status %d", have, want)
 }
 
 // test and return "Location" value after realGet()
