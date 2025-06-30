@@ -5,9 +5,9 @@
 		"BindAddress": "127.0.0.1",
 		"BindPort": 5556,
 		// URL the StepCA server is reachable under
-		"CaUrl": "https://localhost:9000",
+		"CaUrl": "https://ca.example.com:9000",
 		// URL the PostgreSQL server housing the StepCA database is reachable under
-		"CaDbUrl": "postgresql://step:step@localhost/step",
+		"CaDbUrl": "postgresql://stepuser:steppass@localhost/stepdb",
 		// Frequency for certificate database refresh in "m"inutes or "s"seconds (only relevant if "CaDbUrl" is set)
 		"CaDbRefresh": "5m",
 		// SHA256 hash of the root CA certificate used by the StepCA server
@@ -19,6 +19,6 @@
 		// Oauth2  client secret (client must be confidential)
 		"ClientSecret": "xxxxx",
 		// URL under which the .well-known/ OIDC discovery data can be found
-		"OidcBaseUrl": "https://sheldon01-dev.dmz-prg2.suse.org/application/o/georg-stepca-test-app/"
+		"OidcBaseUrl": "https://id.example.com/"
 	}
 }
