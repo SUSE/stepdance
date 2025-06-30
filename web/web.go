@@ -78,7 +78,7 @@ func InitStepdance(s *Stepdance, bind string) *http.Server {
 func (s *Stepdance) errorHandler(w http.ResponseWriter, r *http.Request, sdErr int, text string) {
 	p := new(PageData)
 	if text != "" {
-		p = &PageData{Error: text}
+		p = newErrorData(text)
 	}
 
 	switch sdErr {
@@ -214,6 +214,32 @@ func (s *Stepdance) certReqHandler(w http.ResponseWriter, r *http.Request) {
 	if accessToken == "" {
 		slog.Debug("Certificate request attempted without token")
 		s.errorHandler(w, r, SD_ERR_TOKEN, "")
+		return
+	}
+
+	subject := s.sessionManager.GetString(r.Context(), "subject")
+	certCache := s.Step.Certificates.Load()
+	var certificates cert.DbCertificates
+	if subject != "" && certCache != nil {
+		certificates = s.Step.Certificates.Load().Certificates.Filter(subject, "", 0)
+	}
+
+	ok := true
+	for _, c := range certificates {
+		if !c.Revoked {
+			ok = false
+			break
+		}
+	}
+
+	if !ok {
+		s.templates.CertificateRequestNA.ExecuteTemplate(w, "base",
+			newErrorData(`
+			You are only allowed to have one active certificate at a time.
+			<br>
+			Please revoke all valid certificates before requesting a new one.
+			`),
+		)
 		return
 	}
 
