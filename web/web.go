@@ -1,6 +1,7 @@
 package web
 
 import (
+	"encoding/gob"
 	"github.com/SUSE/stepdance/cert"
 	"github.com/alexedwards/scs/v2"
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -58,6 +59,8 @@ func InitStepdance(s *Stepdance, bind string) *http.Server {
 		return nil
 	}
 
+	gob.Register(&oauth2.Token{})
+
 	srv := &http.Server{
 		Addr:    bind,
 		Handler: s.sessionManager.LoadAndSave(mux),
@@ -98,6 +101,38 @@ func (s *Stepdance) errorHandler(w http.ResponseWriter, r *http.Request, sdErr i
 		w.WriteHeader(http.StatusBadRequest)
 		s.templates.MissingToken.ExecuteTemplate(w, "base", p)
 	}
+}
+
+func (s *Stepdance) tokenValidator(w http.ResponseWriter, r *http.Request) (*oauth2.Token, bool) {
+	var token *oauth2.Token
+	if s.sessionManager.Exists(r.Context(), "token") {
+		token = s.sessionManager.Get(r.Context(), "token").(*oauth2.Token)
+		if !token.Valid() {
+			slog.Debug("Invalid token")
+			s.errorHandler(w, r, SD_ERR_TOKEN, "")
+			return nil, false
+		}
+
+		tokenSource := s.Oauth2Config.TokenSource(r.Context(), token)
+		newToken, err := tokenSource.Token()
+		if err != nil {
+			slog.Error("Failed to get new token", "error", err)
+			return nil, false
+
+		}
+		if newToken.AccessToken != token.AccessToken {
+			slog.Debug("Writing new token")
+			s.sessionManager.Put(r.Context(), "token", newToken)
+			token = newToken
+		}
+
+	} else {
+		slog.Debug("Missing token")
+		s.errorHandler(w, r, SD_ERR_TOKEN, "")
+		return nil, false
+	}
+
+	return token, true
 }
 
 func (s *Stepdance) IndexHandler(w http.ResponseWriter, r *http.Request) {
@@ -186,7 +221,7 @@ func (s *Stepdance) callbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.sessionManager.Put(r.Context(), "token", oauth2Token.AccessToken)
+	s.sessionManager.Put(r.Context(), "token", oauth2Token)
 	ui, err := s.OidcProvider.UserInfo(s.Ctx, s.Oauth2Config.TokenSource(s.Ctx, oauth2Token))
 	if err != nil || ui.Subject == "" {
 		slog.Error("Failed to query userinfo for subject", "error", err)
@@ -210,10 +245,10 @@ func (s *Stepdance) certReqHandler(w http.ResponseWriter, r *http.Request) {
 	// TOOD: validate session?
 	// currently it will just fail if a bogus token is passed, better would be to return early
 
-	accessToken := s.sessionManager.PopString(r.Context(), "token")
-	if accessToken == "" {
-		slog.Debug("Certificate request attempted without token")
-		s.errorHandler(w, r, SD_ERR_TOKEN, "")
+	slog.Debug("req session", "status", s.sessionManager.Status(r.Context()), "token", s.sessionManager.Token(r.Context()))
+
+	token, tok := s.tokenValidator(w, r)
+	if !tok {
 		return
 	}
 
@@ -243,7 +278,7 @@ func (s *Stepdance) certReqHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c, k := s.Step.MakeCertAndKey(accessToken)
+	c, k := s.Step.MakeCertAndKey(token.AccessToken)
 	if c == nil || k == nil {
 		slog.Error("Generated certificate or key is empty")
 		s.errorHandler(w, r, SD_ERR_MISC, "Certificate/key generation failed.")
@@ -263,10 +298,10 @@ func (s *Stepdance) certRevHandler(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: better session validation?
 
-	accessToken := s.sessionManager.PopString(r.Context(), "token")
-	if accessToken == "" {
-		slog.Debug("Certificate revocation attempted without token")
-		s.errorHandler(w, r, SD_ERR_TOKEN, "")
+	slog.Debug("rev session", "status", s.sessionManager.Status(r.Context()), "token", s.sessionManager.Token(r.Context()))
+
+	token, tok := s.tokenValidator(w, r)
+	if !tok {
 		return
 	}
 
@@ -278,7 +313,7 @@ func (s *Stepdance) certRevHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ok := s.Step.RevokeCert(serial, accessToken)
+	ok := s.Step.RevokeCert(serial, token.AccessToken)
 
 	if !ok {
 		s.errorHandler(w, r, SD_ERR_MISC, "Revocation failed.")
