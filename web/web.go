@@ -38,6 +38,7 @@ const (
 	SD_ERR_STATE = 2 // no or unexpected state value in session
 	SD_ERR_TOKEN = 3 // no or unexpected token value in session
 	SD_ERR_PARAM = 4 // missing query parameters
+	SD_ERR_ILLEG = 5 // operation on data not owned by requestor
 )
 
 func InitStepdance(s *Stepdance, bind string) *http.Server {
@@ -100,6 +101,9 @@ func (s *Stepdance) errorHandler(w http.ResponseWriter, r *http.Request, sdErr i
 	case SD_ERR_TOKEN:
 		w.WriteHeader(http.StatusBadRequest)
 		s.templates.MissingToken.ExecuteTemplate(w, "base", p)
+	case SD_ERR_ILLEG:
+		w.WriteHeader(http.StatusForbidden)
+		s.templates.Illegal.ExecuteTemplate(w, "base", p)
 	}
 }
 
@@ -345,6 +349,29 @@ func (s *Stepdance) certRevHandler(w http.ResponseWriter, r *http.Request) {
 		slog.Debug("Certificate revocation attempted without serial")
 		s.errorHandler(w, r, SD_ERR_PARAM, "")
 		return
+	}
+
+	subject := s.sessionManager.GetString(r.Context(), "subject")
+	if subject == "" {
+		slog.Error("Certificate revocation attempted without subject")
+		s.errorHandler(w, r, SD_ERR_MISC, "Missing subject.")
+		return
+	}
+
+	certCache := s.Step.Certificates.Load()
+	if certCache == nil {
+		slog.Error("Certificate revocation attempted with empty cache")
+		s.errorHandler(w, r, SD_ERR_MISC, "Cache not yet populated.")
+		return
+	}
+
+	certificates := certCache.Certificates.Filter("", serial, 1)
+	for _, c := range certificates {
+		if c.CN != subject {
+			slog.Warn("Certificate revocation attempted for certificate not matching subject", "subject", subject, "cn", c.CN)
+			s.errorHandler(w, r, SD_ERR_ILLEG, "")
+			return
+		}
 	}
 
 	ok := s.Step.RevokeCert(serial, token.AccessToken)
