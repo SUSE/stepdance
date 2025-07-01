@@ -242,6 +242,16 @@ func (s *Stepdance) callbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = s.sessionManager.RenewToken(r.Context())
+	if err != nil {
+		slog.Error("Failed to renew session token", "error", err)
+		if err := s.sessionManager.Destroy(r.Context()); err != nil {
+			slog.Error("Failed to destroy session", "error", err)
+		}
+		s.errorHandler(w, r, SD_ERR_MISC, "Session renewal failed.")
+		return
+	}
+
 	s.sessionManager.Put(r.Context(), "token", oauth2Token)
 	s.sessionManager.Put(r.Context(), "token_used", false)
 	ui, err := s.OidcProvider.UserInfo(s.Ctx, s.Oauth2Config.TokenSource(s.Ctx, oauth2Token))
