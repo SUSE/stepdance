@@ -48,7 +48,56 @@
   background-color: #90ebcd;
   width: 20%; }
 
+/* inspired by https://gist.github.com/AllThingsSmitty/cb32e5a377716bc8f147 */
 table.overview {
-  border-spacing: 10px;
-  margin-bottom: 30px;
+  border: 1px solid #ccc;
+  border-collapse: collapse;
+  margin:0;
+  padding:0;
+  width: 100%;
+}
+table.overview tr.overview-tr {
+  border: 1px solid #ddd;
+  padding: 5px;
+}
+table.overview th.overview-th, table td.overview-td {
+  padding: 10px;
+  text-align: center;
+}
+table.overview th {
+  font-size: 14px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+@media screen and (max-width: 600px) {
+  table.overview {
+    border: 0;
+  }
+  table.overview thead {
+    display: none;
+  }
+  table.overview tr.overview-tr {
+    border-bottom: 2px solid #ddd;
+    display: block;
+    margin-bottom: 10px;
+  }
+  table.overview td.overview-td {
+    border-bottom: 1px dotted #ccc;
+    display: block;
+    font-size: 13px;
+    text-align: right;
+  }
+  table.overview td.overview-td:last-child {
+    border-bottom: 0;
+  }
+  table.overview td.overview-td:before {
+    content: attr(data-label);
+    float: left;
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+}
+
+.button-bottom {
+  margin-top: 20px;
 }

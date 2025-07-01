@@ -10,11 +10,16 @@ import (
 	"time"
 )
 
+const timeFormat = time.RFC3339
+
 type DbCertificate struct {
 	Raw     x509.Certificate
 	CN      string
 	Serial  string // some sort of integer might make more sense but the default big.Int was difficult to read
 	Revoked bool
+	// store converted timestamps already as these fields are only used for display in HTML
+	NotBefore string
+	NotAfter  string
 }
 
 type DbCertificates []*DbCertificate
@@ -81,10 +86,12 @@ func (s *Step) GetCertificates() DbCertificates {
 		}
 
 		c := DbCertificate{
-			Raw:     *crt,
-			CN:      crt.Subject.CommonName,
-			Serial:  crt.SerialNumber.String(),
-			Revoked: revoked,
+			Raw:       *crt,
+			CN:        crt.Subject.CommonName,
+			Serial:    crt.SerialNumber.String(),
+			Revoked:   revoked,
+			NotBefore: crt.NotBefore.Format(timeFormat),
+			NotAfter:  crt.NotAfter.Format(timeFormat),
 		}
 
 		out = append(out, &c)

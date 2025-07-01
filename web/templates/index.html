@@ -14,24 +14,28 @@
             <div>
             {{- if .Certificates }}
               <table class="overview">
-                <tr>
-                  <th>Serial</th>
-                  <th>Common Name</th>
-                  <th>Revoked?</th>
+                <tr class="overview-tr">
+                  <th class="overview-th">Serial</th>
+                  <th class="overview-th">Common Name</th>
+                  <th class="overview-th">Not Before</th>
+                  <th class="overview-th">Not After</th>
+                  <th class="overview-th">Revoked?</th>
                 </tr>
                 {{- range .Certificates }}
-                <tr>
-                  <td>{{ .Serial }}</td>
-                  <td>{{ .CN }}</td>
-		  <td>{{- if .Revoked }}Yes{{- else }}No, <a href="/certificate/revoke?serial={{- .Serial }}">revoke now</a>{{- end }}</td>
+                <tr class="overview-tr">
+                  <td class="overview-td">{{ .Serial }}</td>
+                  <td class="overview-td">{{ .CN }}</td>
+                  <td class="overview-td">{{ .NotBefore }}</td>
+                  <td class="overview-td">{{ .NotAfter }}</td>
+                  <td class="overview-td">{{- if .Revoked }}Yes{{- else }}No, <a href="/certificate/revoke?serial={{- .Serial }}">revoke now</a>{{- end }}</td>
                 </tr>
                 {{- end }}
               </table>
             {{- end }}
             </div>
-            <div><a class="c1-btn c1-btn--primary u-margin-bottom persimmon" href="/certificate/request">Request certificate</a></div>
+            <div><a class="c1-btn c1-btn--primary button-bottom persimmon" href="/certificate/request">Request certificate</a></div>
 {{- else }}
-            <div><a class="c1-btn c1-btn--primary u-margin-bottom persimmon" href="/login/init">Login</a></div>
+            <div><a class="c1-btn c1-btn--primary button-bottom persimmon" href="/login/init">Login</a></div>
 {{- end }}
           </div>
         </div>
