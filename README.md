@@ -4,6 +4,11 @@ A client certificate self-service portal built on [step-ca](https://smallstep.co
 
 Users are authenticated through OIDC, certificates are mapped through the `sub`ject contained in the JWT.
 
+## Documentation
+
+- To get started with deploying Stepdance, follow [the installation instructions](documentation/01_INSTALL.md).
+- To get started with using a deployed Stepdance, follow [the usage instructions](documentation/02_USE.md).
+
 ## Features
 
 - overview of certificates
