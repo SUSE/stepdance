@@ -222,7 +222,7 @@ func TestIndexAnonymous(t *testing.T) {
 
 func TestLogin(t *testing.T) {
 	// 1. initial request
-	r, _ := realGet(t, "/login")
+	r, _ := realGet(t, "/login/init")
 
 	assertStatusEqual(t, r.StatusCode, http.StatusFound)
 

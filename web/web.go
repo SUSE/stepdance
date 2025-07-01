@@ -45,8 +45,8 @@ func InitStepdance(s *Stepdance, bind string) *http.Server {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.IndexHandler)
-	mux.HandleFunc("/login", s.loginHandler)
-	mux.HandleFunc("/callback", s.callbackHandler)
+	mux.HandleFunc("/login/init", s.loginHandler)
+	mux.HandleFunc("/login/callback", s.callbackHandler)
 	mux.HandleFunc("/certificate/download", s.downloadHandler)
 	mux.HandleFunc("/certificate/request", s.certReqHandler)
 	mux.HandleFunc("/certificate/revoke", s.certRevHandler)
@@ -277,7 +277,7 @@ func (s *Stepdance) certReqHandler(w http.ResponseWriter, r *http.Request) {
 
 	if s.sessionManager.GetBool(r.Context(), "token_used") {
 		slog.Debug("token already used")
-		http.Redirect(w, r, "/login", http.StatusFound)
+		http.Redirect(w, r, "/login/init", http.StatusFound)
 		return
 	}
 
