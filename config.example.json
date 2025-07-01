@@ -19,6 +19,8 @@
 		// Oauth2  client secret (client must be confidential)
 		"ClientSecret": "xxxxx",
 		// URL under which the .well-known/ OIDC discovery data can be found
-		"OidcBaseUrl": "https://id.example.com/"
+		"OidcBaseUrl": "https://id.example.com/",
+		// URL under which Stepdance is hosted (used for OAuth2 callback)
+		"AppBaseUrl": "https://certificates.example.com",
 	}
 }

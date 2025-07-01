@@ -76,11 +76,16 @@ func main() {
 
 	slog.Debug("Initializing Oauth2 ...")
 
+	abu := c.AppBaseUrl
+	if abu == "" {
+		abu = "http://" + bind
+	}
+
 	s.Oauth2Config = oauth2.Config{
 		ClientID:     c.ClientId,
 		ClientSecret: c.ClientSecret,
 		Endpoint:     provider.Endpoint(),
-		RedirectURL:  "http://" + bind + "/callback",
+		RedirectURL:  abu + "/login/callback",
 		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
 	}
 

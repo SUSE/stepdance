@@ -11,6 +11,7 @@ type topConfig struct {
 }
 
 type Config struct {
+	AppBaseUrl   string
 	BindAddress  string
 	BindPort     int
 	CaUrl        string
