@@ -106,6 +106,8 @@ func (s *Stepdance) errorHandler(w http.ResponseWriter, r *http.Request, sdErr i
 func (s *Stepdance) tokenValidator(w http.ResponseWriter, r *http.Request) (*oauth2.Token, bool) {
 	var token *oauth2.Token
 	if s.sessionManager.Exists(r.Context(), "token") {
+		s.sessionManager.Put(r.Context(), "token_used", true)
+
 		token = s.sessionManager.Get(r.Context(), "token").(*oauth2.Token)
 		if !token.Valid() {
 			slog.Debug("Invalid token")
@@ -123,6 +125,7 @@ func (s *Stepdance) tokenValidator(w http.ResponseWriter, r *http.Request) (*oau
 		if newToken.AccessToken != token.AccessToken {
 			slog.Debug("Writing new token")
 			s.sessionManager.Put(r.Context(), "token", newToken)
+			s.sessionManager.Put(r.Context(), "token_used", false)
 			token = newToken
 		}
 
@@ -240,6 +243,7 @@ func (s *Stepdance) callbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.sessionManager.Put(r.Context(), "token", oauth2Token)
+	s.sessionManager.Put(r.Context(), "token_used", false)
 	ui, err := s.OidcProvider.UserInfo(s.Ctx, s.Oauth2Config.TokenSource(s.Ctx, oauth2Token))
 	if err != nil || ui.Subject == "" {
 		slog.Error("Failed to query userinfo for subject", "error", err)
@@ -260,6 +264,12 @@ func (s *Stepdance) certReqHandler(w http.ResponseWriter, r *http.Request) {
 	// currently it will just fail if a bogus token is passed, better would be to return early
 
 	slog.Debug("req session", "status", s.sessionManager.Status(r.Context()), "token", s.sessionManager.Token(r.Context()))
+
+	if s.sessionManager.GetBool(r.Context(), "token_used") {
+		slog.Debug("token already used")
+		http.Redirect(w, r, "/login", http.StatusFound)
+		return
+	}
 
 	token, tok := s.tokenValidator(w, r)
 	if !tok {
