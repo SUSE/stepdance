@@ -2,7 +2,15 @@
 
 podman network ls -q | grep -q ^step\$ || podman network create step
 
-test -d test/postgresql/base && rm -r test/postgresql/*
+if [ -d test/postgresql ]
+then
+	if [ -d test/postgresql/base ]
+	then
+		rm -r test/postgresql/*
+	fi
+else
+	mkdir test/postgresql
+fi
 
 # container names
 # database container name must be aligned with test/stepca/config/ca.json
