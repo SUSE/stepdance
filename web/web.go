@@ -217,10 +217,50 @@ func (s *Stepdance) IndexHandler(w http.ResponseWriter, r *http.Request) {
 	subject := s.sessionManager.GetString(r.Context(), "subject")
 	p := PageData{Subject: subject, SessionId: s.getSessionId(r)}
 	certCache := s.Step.Certificates.Load()
-	if subject != "" && certCache != nil {
+	if subject != "" && certCache != nil && s.checkSession(w, r) {
 		p.Certificates = s.Step.Certificates.Load().Certificates.Filter(subject, "", 0)
 	}
 	s.templates.Index.ExecuteTemplate(w, "base", p)
+}
+
+func (s *Stepdance) getSubject(w http.ResponseWriter, r *http.Request) (string, bool) {
+	token := s.sessionManager.Get(r.Context(), "token").(*oauth2.Token)
+	if token == nil {
+		slog.ErrorContext(r.Context(), "Subject query attempted without token")
+		s.errorHandler(w, r, SD_ERR_MISC, "Subject query failed (no token).")
+	}
+
+	ui, err := s.OidcProvider.UserInfo(s.Ctx, s.Oauth2Config.TokenSource(s.Ctx, token))
+	if err != nil || ui.Subject == "" {
+		slog.ErrorContext(r.Context(), "Failed to query userinfo for subject", "error", err)
+		s.errorHandler(w, r, SD_ERR_MISC, "Subject query failed (failed to query user info).")
+		return "", false
+	}
+
+	return ui.Subject, true
+}
+
+func (s *Stepdance) checkSession(w http.ResponseWriter, r *http.Request) bool {
+	subject_session := s.sessionManager.GetString(r.Context(), "subject")
+
+	if subject_session == "" || s.sessionManager.GetString(r.Context(), "state") == "" || s.sessionManager.GetString(r.Context(), "nonce") == "" {
+		slog.DebugContext(r.Context(), "Privileged action attempted without login")
+		s.errorHandler(w, r, SD_ERR_STATE, "")
+		return false
+	}
+
+	subject_userinfo, ok := s.getSubject(w, r)
+	if !ok {
+		return false
+	}
+
+	if subject_session != subject_userinfo {
+		slog.WarnContext(r.Context(), "Privileged action attempted with mismatching subject", "subject_session", subject_session, "subject_userinfo", subject_userinfo)
+		s.errorHandler(w, r, SD_ERR_ILLEG, "")
+		return false
+	}
+
+	return true
 }
 
 func (s *Stepdance) checkState(w http.ResponseWriter, r *http.Request) bool {
@@ -304,15 +344,17 @@ func (s *Stepdance) callbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	s.sessionManager.Put(r.Context(), "token", oauth2Token)
 	s.sessionManager.Put(r.Context(), "token_used", false)
-	ui, err := s.OidcProvider.UserInfo(s.Ctx, s.Oauth2Config.TokenSource(s.Ctx, oauth2Token))
-	if err != nil || ui.Subject == "" {
-		slog.ErrorContext(r.Context(), "Failed to query userinfo for subject", "error", err)
-		s.errorHandler(w, r, SD_ERR_MISC, "Subject query failed.")
+	subject, ok := s.getSubject(w, r)
+	if !ok {
 		return
 	}
 
-	slog.InfoContext(r.Context(), "Authenticated user", "subject", ui.Subject)
-	s.sessionManager.Put(r.Context(), "subject", ui.Subject)
+	slog.InfoContext(r.Context(), "Authenticated user", "subject", subject)
+	s.sessionManager.Put(r.Context(), "subject", subject)
+
+	if !s.checkSession(w, r) {
+		return
+	}
 
 	http.Redirect(w, r, s.getOrigPath(r), http.StatusFound)
 }
@@ -320,8 +362,9 @@ func (s *Stepdance) callbackHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Stepdance) certReqHandler(w http.ResponseWriter, r *http.Request) {
 	s.setOrigPath(r)
 
-	// TOOD: validate session?
-	// currently it will just fail if a bogus token is passed, better would be to return early
+	if !s.checkSession(w, r) {
+		return
+	}
 
 	slog.DebugContext(r.Context(), "req session", "status", s.sessionManager.Status(r.Context()), "token", s.sessionManager.Token(r.Context()))
 
@@ -380,7 +423,9 @@ func (s *Stepdance) certReqHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Stepdance) certRevHandler(w http.ResponseWriter, r *http.Request) {
 	s.setOrigPath(r)
 
-	// TODO: better session validation?
+	if !s.checkSession(w, r) {
+		return
+	}
 
 	slog.DebugContext(r.Context(), "rev session", "status", s.sessionManager.Status(r.Context()), "token", s.sessionManager.Token(r.Context()))
 
@@ -412,12 +457,21 @@ func (s *Stepdance) certRevHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	certificates := certCache.Certificates.Filter("", serial, 1)
+	found := false
 	for _, c := range certificates {
 		if c.CN != subject {
-			slog.WarnContext(r.Context(), "Certificate revocation attempted for certificate not matching subject", "subject", subject, "cn", c.CN)
+			slog.WarnContext(r.Context(), "Certificate revocation attempted for certificate not matching subject", "subject", subject, "cn", c.CN, "serial", serial)
 			s.errorHandler(w, r, SD_ERR_ILLEG, "")
 			return
 		}
+
+		found = true
+	}
+
+	if !found {
+		slog.WarnContext(r.Context(), "Certificate revocation attempted for nonexistent certificate", "subject", subject, "serial", serial)
+		s.errorHandler(w, r, SD_ERR_ILLEG, "")
+		return
 	}
 
 	ok := s.Step.RevokeCert(serial, token.AccessToken)
@@ -432,6 +486,10 @@ func (s *Stepdance) certRevHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *Stepdance) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	s.setOrigPath(r)
+
+	if !s.checkSession(w, r) {
+		return
+	}
 
 	if !s.checkState(w, r) {
 		return
