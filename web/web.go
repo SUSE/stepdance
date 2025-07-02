@@ -72,11 +72,7 @@ func InitStepdance(s *Stepdance, bind string) *http.Server {
 
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./web/static"))))
 
-	var tok bool
-	s.templates, tok = readTemplates()
-	if !tok {
-		return nil
-	}
+	s.templates = readTemplates()
 
 	gob.Register(&oauth2.Token{})
 

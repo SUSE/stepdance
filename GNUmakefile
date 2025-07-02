@@ -2,6 +2,7 @@ SRCDIRS = cert cmd/stepdance web
 
 .PHONY: build
 build:
+	go generate web/template.go
 	go build ./cmd/stepdance
 
 .PHONY: dev
