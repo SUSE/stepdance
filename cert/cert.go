@@ -50,13 +50,15 @@ type DbCertificateCache struct {
 func (d *DbCertificates) Filter(cn string, serial string, limit int) DbCertificates {
 	out := DbCertificates{}
 
-	for i, c := range *d {
-		if limit > 0 && i > limit {
-			break
-		}
-
+	found := 0
+	for _, c := range *d {
 		if (cn != "" && c.CN == cn) || (serial != "" && c.Serial == serial) {
 			out = append(out, c)
+
+			found = found + 1
+			if limit > 0 && found == limit {
+				break
+			}
 		}
 	}
 
