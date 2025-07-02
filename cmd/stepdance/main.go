@@ -50,7 +50,9 @@ func main() {
 		panic(err)
 	}
 
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel})))
+	slog.SetDefault(slog.New(&logHandler{
+		TextHandler: slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel}),
+	}))
 
 	c := newConfig(configArg)
 

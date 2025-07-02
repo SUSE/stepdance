@@ -16,23 +16,21 @@
    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-package web
+package main
 
 import (
-	"crypto/rand"
-	"encoding/base64"
-	"encoding/hex"
-	"io"
+	"context"
+	"log/slog"
 )
 
-func randString(nByte int, urlEncode bool) (string, error) {
-	b := make([]byte, nByte)
-	if _, err := io.ReadFull(rand.Reader, b); err != nil {
-		return "", err
-	}
-	if urlEncode {
-		return base64.RawURLEncoding.EncodeToString(b), nil
+type logHandler struct {
+	*slog.TextHandler
+}
+
+func (lh *logHandler) Handle(ctx context.Context, r slog.Record) error {
+	if val, ok := ctx.Value("session_id").(string); ok {
+		r.AddAttrs(slog.String("session_id", val))
 	}
 
-	return hex.EncodeToString(b), nil
+	return lh.TextHandler.Handle(ctx, r)
 }

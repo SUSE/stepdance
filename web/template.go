@@ -29,10 +29,21 @@ type PageData struct {
 	Subject      string
 	State        string
 	Error        template.HTML
+	SessionId    string
 }
 
-func newErrorData(text string) *PageData {
-	return &PageData{Error: template.HTML(text)}
+func newErrorData(text string, id string) *PageData {
+	p := PageData{}
+
+	if text != "" {
+		p.Error = template.HTML(text)
+	}
+
+	if id != "" {
+		p.SessionId = id
+	}
+
+	return &p
 }
 
 //go:generate ./mktemplatesgo.sh

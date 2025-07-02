@@ -78,7 +78,7 @@ func InitStepdance(s *Stepdance, bind string) *http.Server {
 
 	srv := &http.Server{
 		Addr:    bind,
-		Handler: s.sessionManager.LoadAndSave(mux),
+		Handler: s.sessionManager.LoadAndSave(s.initHandler(mux)),
 	}
 
 	go func() {
@@ -94,10 +94,7 @@ func InitStepdance(s *Stepdance, bind string) *http.Server {
 }
 
 func (s *Stepdance) errorHandler(w http.ResponseWriter, r *http.Request, sdErr int, text string) {
-	p := new(PageData)
-	if text != "" {
-		p = newErrorData(text)
-	}
+	p := newErrorData(text, s.getSessionId(r))
 
 	switch sdErr {
 	case SD_ERR_MISC:
@@ -128,7 +125,7 @@ func (s *Stepdance) tokenValidator(w http.ResponseWriter, r *http.Request) (*oau
 
 		token = s.sessionManager.Get(r.Context(), "token").(*oauth2.Token)
 		if !token.Valid() {
-			slog.Debug("Invalid token")
+			slog.DebugContext(r.Context(), "Invalid token")
 			s.errorHandler(w, r, SD_ERR_TOKEN, "")
 			return nil, false
 		}
@@ -136,19 +133,19 @@ func (s *Stepdance) tokenValidator(w http.ResponseWriter, r *http.Request) (*oau
 		tokenSource := s.Oauth2Config.TokenSource(r.Context(), token)
 		newToken, err := tokenSource.Token()
 		if err != nil {
-			slog.Error("Failed to get new token", "error", err)
+			slog.ErrorContext(r.Context(), "Failed to get new token", "error", err)
 			return nil, false
 
 		}
 		if newToken.AccessToken != token.AccessToken {
-			slog.Debug("Writing new token")
+			slog.DebugContext(r.Context(), "Writing new token")
 			s.sessionManager.Put(r.Context(), "token", newToken)
 			s.sessionManager.Put(r.Context(), "token_used", false)
 			token = newToken
 		}
 
 	} else {
-		slog.Debug("Missing token")
+		slog.DebugContext(r.Context(), "Missing token")
 		s.errorHandler(w, r, SD_ERR_TOKEN, "")
 		return nil, false
 	}
@@ -161,7 +158,7 @@ func (s *Stepdance) setOrigPath(r *http.Request) {
 	if r.URL.RawQuery != "" {
 		path = path + "?" + r.URL.RawQuery
 	}
-	slog.Debug("setting origPath", "path", path)
+	slog.DebugContext(r.Context(), "setting origPath", "path", path)
 	s.sessionManager.Put(r.Context(), "origPath", path)
 }
 
@@ -174,6 +171,41 @@ func (s *Stepdance) getOrigPath(r *http.Request) string {
 	return path
 }
 
+func (s *Stepdance) getSessionId(r *http.Request) string {
+	return s.sessionManager.GetString(r.Context(), "id")
+}
+
+func (s *Stepdance) initHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		had_session_id := true
+
+		session_id := s.getSessionId(r)
+		if session_id == "" {
+			had_session_id = false
+
+			var err error
+			session_id, err = randString(12, false)
+			if err != nil {
+				slog.ErrorContext(r.Context(), "session id generation failed", "error", err)
+				s.errorHandler(w, r, SD_ERR_MISC, "")
+				return
+			}
+
+			// for display on error pages
+			s.sessionManager.Put(r.Context(), "id", session_id)
+		}
+
+		// for logging
+		r = r.WithContext(context.WithValue(r.Context(), "session_id", session_id))
+
+		if !had_session_id {
+			slog.DebugContext(r.Context(), "Initialized session")
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *Stepdance) IndexHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
@@ -183,7 +215,7 @@ func (s *Stepdance) IndexHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "text/html")
 
 	subject := s.sessionManager.GetString(r.Context(), "subject")
-	p := PageData{Subject: subject}
+	p := PageData{Subject: subject, SessionId: s.getSessionId(r)}
 	certCache := s.Step.Certificates.Load()
 	if subject != "" && certCache != nil {
 		p.Certificates = s.Step.Certificates.Load().Certificates.Filter(subject, "", 0)
@@ -201,15 +233,15 @@ func (s *Stepdance) checkState(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func (s *Stepdance) loginHandler(w http.ResponseWriter, r *http.Request) {
-	state, err := randString(16)
+	state, err := randString(16, true)
 	if err != nil {
-		slog.Error("randString() failed", "error", err)
+		slog.ErrorContext(r.Context(), "randString() failed", "error", err)
 		s.errorHandler(w, r, SD_ERR_MISC, "")
 		return
 	}
-	nonce, err := randString(16)
+	nonce, err := randString(16, true)
 	if err != nil {
-		slog.Error("randString() failed", "error", err)
+		slog.ErrorContext(r.Context(), "randString() failed", "error", err)
 		s.errorHandler(w, r, SD_ERR_MISC, "")
 		return
 	}
@@ -234,37 +266,37 @@ func (s *Stepdance) callbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	oauth2Token, err := s.Oauth2Config.Exchange(s.Ctx, code)
 	if err != nil {
-		slog.Error("Token exchange failed", "error", err)
+		slog.ErrorContext(r.Context(), "Token exchange failed", "error", err)
 		s.errorHandler(w, r, SD_ERR_MISC, "Token exchange failed.")
 		return
 	}
 
 	rawIDToken, ok := oauth2Token.Extra("id_token").(string)
 	if !ok {
-		slog.Error("No id_token field in oauth2 token")
+		slog.ErrorContext(r.Context(), "No id_token field in oauth2 token")
 		s.errorHandler(w, r, SD_ERR_MISC, "Missing id_token field.")
 		return
 	}
 
 	idToken, err := s.Verifier.Verify(s.Ctx, rawIDToken)
 	if err != nil {
-		slog.Error("ID token verification failed", "error", err)
+		slog.ErrorContext(r.Context(), "ID token verification failed", "error", err)
 		s.errorHandler(w, r, SD_ERR_MISC, "ID token verification failed.")
 		return
 	}
 
 	nonce := s.sessionManager.GetString(r.Context(), "nonce")
 	if idToken.Nonce != nonce {
-		slog.Error("Nonce does not match")
+		slog.ErrorContext(r.Context(), "Nonce does not match")
 		s.errorHandler(w, r, SD_ERR_MISC, "Nonce verification failed.")
 		return
 	}
 
 	err = s.sessionManager.RenewToken(r.Context())
 	if err != nil {
-		slog.Error("Failed to renew session token", "error", err)
+		slog.ErrorContext(r.Context(), "Failed to renew session token", "error", err)
 		if err := s.sessionManager.Destroy(r.Context()); err != nil {
-			slog.Error("Failed to destroy session", "error", err)
+			slog.ErrorContext(r.Context(), "Failed to destroy session", "error", err)
 		}
 		s.errorHandler(w, r, SD_ERR_MISC, "Session renewal failed.")
 		return
@@ -274,12 +306,12 @@ func (s *Stepdance) callbackHandler(w http.ResponseWriter, r *http.Request) {
 	s.sessionManager.Put(r.Context(), "token_used", false)
 	ui, err := s.OidcProvider.UserInfo(s.Ctx, s.Oauth2Config.TokenSource(s.Ctx, oauth2Token))
 	if err != nil || ui.Subject == "" {
-		slog.Error("Failed to query userinfo for subject", "error", err)
+		slog.ErrorContext(r.Context(), "Failed to query userinfo for subject", "error", err)
 		s.errorHandler(w, r, SD_ERR_MISC, "Subject query failed.")
 		return
 	}
 
-	slog.Info("Authenticated user", "subject", ui.Subject)
+	slog.InfoContext(r.Context(), "Authenticated user", "subject", ui.Subject)
 	s.sessionManager.Put(r.Context(), "subject", ui.Subject)
 
 	http.Redirect(w, r, s.getOrigPath(r), http.StatusFound)
@@ -291,10 +323,10 @@ func (s *Stepdance) certReqHandler(w http.ResponseWriter, r *http.Request) {
 	// TOOD: validate session?
 	// currently it will just fail if a bogus token is passed, better would be to return early
 
-	slog.Debug("req session", "status", s.sessionManager.Status(r.Context()), "token", s.sessionManager.Token(r.Context()))
+	slog.DebugContext(r.Context(), "req session", "status", s.sessionManager.Status(r.Context()), "token", s.sessionManager.Token(r.Context()))
 
 	if s.sessionManager.GetBool(r.Context(), "token_used") {
-		slog.Debug("token already used")
+		slog.DebugContext(r.Context(), "token already used")
 		http.Redirect(w, r, "/login/init", http.StatusFound)
 		return
 	}
@@ -325,14 +357,14 @@ func (s *Stepdance) certReqHandler(w http.ResponseWriter, r *http.Request) {
 			You are only allowed to have one active certificate at a time.
 			<br>
 			Please revoke all valid certificates before requesting a new one.
-			`),
+			`, s.getSessionId(r)),
 		)
 		return
 	}
 
 	c, k := s.Step.MakeCertAndKey(token.AccessToken)
 	if c == nil || k == nil {
-		slog.Error("Generated certificate or key is empty")
+		slog.ErrorContext(r.Context(), "Generated certificate or key is empty")
 		s.errorHandler(w, r, SD_ERR_MISC, "Certificate/key generation failed.")
 		return
 	}
@@ -341,7 +373,7 @@ func (s *Stepdance) certReqHandler(w http.ResponseWriter, r *http.Request) {
 	s.sessionManager.Put(r.Context(), "k", k)
 
 	w.Header().Add("Content-Type", "text/html")
-	p := PageData{State: s.sessionManager.GetString(r.Context(), "state")}
+	p := PageData{State: s.sessionManager.GetString(r.Context(), "state"), SessionId: s.getSessionId(r)}
 	s.templates.CertificateRequest.ExecuteTemplate(w, "base", p)
 }
 
@@ -350,7 +382,7 @@ func (s *Stepdance) certRevHandler(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: better session validation?
 
-	slog.Debug("rev session", "status", s.sessionManager.Status(r.Context()), "token", s.sessionManager.Token(r.Context()))
+	slog.DebugContext(r.Context(), "rev session", "status", s.sessionManager.Status(r.Context()), "token", s.sessionManager.Token(r.Context()))
 
 	token, tok := s.tokenValidator(w, r)
 	if !tok {
@@ -360,21 +392,21 @@ func (s *Stepdance) certRevHandler(w http.ResponseWriter, r *http.Request) {
 	serial := r.URL.Query().Get("serial")
 
 	if serial == "" {
-		slog.Debug("Certificate revocation attempted without serial")
+		slog.DebugContext(r.Context(), "Certificate revocation attempted without serial")
 		s.errorHandler(w, r, SD_ERR_PARAM, "")
 		return
 	}
 
 	subject := s.sessionManager.GetString(r.Context(), "subject")
 	if subject == "" {
-		slog.Error("Certificate revocation attempted without subject")
+		slog.ErrorContext(r.Context(), "Certificate revocation attempted without subject")
 		s.errorHandler(w, r, SD_ERR_MISC, "Missing subject.")
 		return
 	}
 
 	certCache := s.Step.Certificates.Load()
 	if certCache == nil {
-		slog.Error("Certificate revocation attempted with empty cache")
+		slog.ErrorContext(r.Context(), "Certificate revocation attempted with empty cache")
 		s.errorHandler(w, r, SD_ERR_MISC, "Cache not yet populated.")
 		return
 	}
@@ -382,7 +414,7 @@ func (s *Stepdance) certRevHandler(w http.ResponseWriter, r *http.Request) {
 	certificates := certCache.Certificates.Filter("", serial, 1)
 	for _, c := range certificates {
 		if c.CN != subject {
-			slog.Warn("Certificate revocation attempted for certificate not matching subject", "subject", subject, "cn", c.CN)
+			slog.WarnContext(r.Context(), "Certificate revocation attempted for certificate not matching subject", "subject", subject, "cn", c.CN)
 			s.errorHandler(w, r, SD_ERR_ILLEG, "")
 			return
 		}
@@ -417,7 +449,7 @@ func (s *Stepdance) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if data == nil || !ok {
-		slog.Error("Incomplete data to offer for download")
+		slog.ErrorContext(r.Context(), "Incomplete data to offer for download")
 		s.errorHandler(w, r, SD_ERR_MISC, "No download data.")
 		return
 	}

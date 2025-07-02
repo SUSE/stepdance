@@ -10,5 +10,12 @@
     {{template "top"}}
     {{template "content" .}}
   </body>
+  <footer>
+    {{- if .SessionId}}
+    <div class="session_id">
+      Session identifier: <code>{{.SessionId}}</code>
+    </div>
+    {{- end}}
+  </footer>
 </html>
 {{end}}

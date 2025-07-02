@@ -101,3 +101,20 @@ table.overview th {
 .button-bottom {
   margin-top: 20px;
 }
+
+footer {
+    bottom: 0;
+    /* position: fixed; */
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    background-color: white;
+}
+
+footer.session_id {
+    height: 100px;
+    margin: auto;
+    width: 400px;
+    text-align: center;
+    padding: 10px;
+}
