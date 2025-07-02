@@ -181,7 +181,7 @@ func TestMain(m *testing.M) {
 		ClientID:     mcfg.ClientID,
 		ClientSecret: mcfg.ClientSecret,
 		Endpoint:     provider.Endpoint(),
-		RedirectURL:  "http://localhost:9100/callback",
+		RedirectURL:  "http://localhost:9100/login/callback",
 		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
 	}
 
@@ -267,7 +267,7 @@ func TestLogin(t *testing.T) {
 	}
 	location = locations[0]
 
-	assert.Contains(t, location, "/callback", "missing or wrong callback redirection")
+	assert.Contains(t, location, "/login/callback", "missing or wrong callback redirection")
 	assert.Contains(t, location, "?code=", "missing or wrong \"code\" parameter in callback redirection")
 	assert.Contains(t, location, "&state=", "missing or wrong \"state\" callback redirection")
 
