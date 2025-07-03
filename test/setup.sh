@@ -18,20 +18,26 @@ C_PG=t-stepdance-postgresql
 C_SC=t-stepdance-stepca
 C_NW=host  # step network doesn't work as host test suite needs to connect to oidc provider discovery inside container overwriting issuer causes iss mismatch; running test suite inside container too is an idea but would need a step cli
 
-userns_arg=''
+c_userns_arg=''
 if [ "$(id -u)" -gt 0 ]
 then
-	userns_arg='--userns=keep-id'
+	c_userns_arg='--userns=keep-id'
+fi
+
+c_cavol_arg=''
+if [ -f /etc/ssl/ca-bundle.pem ]
+then
+	c_cavol_arg='-v /etc/ssl/ca-bundle.pem:/etc/ssl/certs/ca-certificates.crt:ro'
 fi
 
 podman run -d \
 	--name=$C_PG \
 	--network=$C_NW \
 	--rm \
-	$userns_arg \
 	-e POSTGRES_PASSWORD=ThisIsDumb \
 	-p 5432:5432 \
 	-v ./test/postgresql:/var/lib/postgresql/data \
+	$c_userns_arg \
 	docker.io/postgres
 
 i=0
@@ -51,16 +57,17 @@ do
 done
 podman exec $C_PG psql -Upostgres -c "ALTER USER step WITH LOGIN PASSWORD 'step'; GRANT ALL PRIVILEGES ON DATABASE step TO step; ALTER DATABASE step OWNER to step;"
 
+# shellcheck disable=SC2086 # word splitting is need for $c_cavol_arg
 podman run -d \
 	--name=$C_SC \
 	--network=$C_NW \
 	--rm \
-	$userns_arg \
 	-e DOCKER_STEPCA_INIT_DNS_NAMES=localhost,example.com \
 	-e DOCKER_STEPCA_INIT_NAME=TestCA \
 	-e DOCKER_STEPCA_INIT_PASSWORD=ThisIsDumb \
 	-e DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT=true \
 	-p 9000:9000 \
-	-v /etc/ssl/ca-bundle.pem:/etc/ssl/certs/ca-certificates.crt:ro \
 	-v ./test/stepca:/home/step \
+	$c_userns_arg \
+	$c_cavol_arg \
 	docker.io/smallstep/step-ca
