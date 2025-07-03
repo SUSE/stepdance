@@ -30,7 +30,7 @@ then
 	c_cavol_arg='-v /etc/ssl/ca-bundle.pem:/etc/ssl/certs/ca-certificates.crt:ro'
 fi
 
-podman run -d \
+podman run -dq \
 	--name=$C_PG \
 	--network=$C_NW \
 	--rm \
@@ -58,7 +58,7 @@ done
 podman exec $C_PG psql -Upostgres -c "ALTER USER step WITH LOGIN PASSWORD 'step'; GRANT ALL PRIVILEGES ON DATABASE step TO step; ALTER DATABASE step OWNER to step;"
 
 # shellcheck disable=SC2086 # word splitting is need for $c_cavol_arg
-podman run -d \
+podman run -dq \
 	--name=$C_SC \
 	--network=$C_NW \
 	--rm \
