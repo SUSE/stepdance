@@ -59,3 +59,7 @@ Requirements are [`podman`](https://podman.io/).
 
 1. `make dev` - will bring up one container with Step CA, and one with PostgreSQL
 2. `make test` - will run the test suite
+
+### CI
+
+[![Build Status](https://app.travis-ci.com/SUSE/stepdance.svg?token=PL4hsx5FsKtjUyxyyBtE&branch=main)](https://app.travis-ci.com/SUSE/stepdance)
