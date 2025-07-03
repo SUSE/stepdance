@@ -7,7 +7,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.14.1
 	github.com/jackc/pgx/v5 v5.6.0
 	github.com/oauth2-proxy/mockoidc v0.0.0-20240214162133-caebfff84d25
-	github.com/smallstep/certificates v0.28.3
+	github.com/smallstep/certificates v0.28.3-rc1.0.20250703180015-244e61098684
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/net v0.41.0
 	golang.org/x/oauth2 v0.30.0
@@ -95,6 +95,3 @@ require (
 
 // pending https://github.com/oauth2-proxy/mockoidc/pull/45
 replace github.com/oauth2-proxy/mockoidc => github.com/tacerus/go-mockoidc v0.0.2
-
-// pending https://github.com/smallstep/certificates/issues/2323
-replace github.com/smallstep/certificates v0.28.3 => /home/georg/Work/git/smallstep-certificates

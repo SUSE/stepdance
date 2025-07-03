@@ -22,6 +22,7 @@ import (
 	"database/sql"
 	"github.com/smallstep/certificates/ca"
 	"log/slog"
+	"net/url"
 	"os"
 	"sync/atomic"
 )
@@ -44,12 +45,12 @@ func (s *Step) Token(subject string) string {
 	return token
 }
 
-func NewStep(url string, hash string, dburl string, adminpass string) *Step {
+func NewStep(caurl string, hash string, dburl string, adminpass string) *Step {
 	s := new(Step)
 
 	slog.Debug("Initializing CA client ...")
 
-	client, err := ca.NewClient(url, ca.WithRootSHA256(hash))
+	client, err := ca.NewClient(caurl, ca.WithRootSHA256(hash))
 	if err != nil {
 		slog.Error("Could not initiate CA client", "error", err)
 		os.Exit(1)
@@ -65,9 +66,16 @@ func NewStep(url string, hash string, dburl string, adminpass string) *Step {
 
 	s.client = client
 
-	prov, err := ca.NewProvisioner("Admin JWK", "", url, []byte(adminpass), ca.WithRootSHA256(hash))
+	prov, err := ca.NewProvisioner("Admin JWK", "", caurl, []byte(adminpass), ca.WithRootSHA256(hash))
 	if err != nil {
-		slog.Error("Could no initiate CA admin provisioner", "error", err)
+		slog.Error("Could not initiate CA admin provisioner", "error", err)
+	}
+
+	u, err := url.Parse(prov.GetCaURL())
+	if err == nil {
+		prov.SetAudience(u.ResolveReference(&url.URL{Path: "/1.0/revoke"}).String())
+	} else {
+		slog.Error("Could not parse CA URL", "error", err)
 	}
 
 	s.provisioner = prov
