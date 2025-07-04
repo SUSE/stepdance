@@ -1,0 +1,41 @@
+[Unit]
+Description=Stepdance
+Documentation=https://github.com/SUSE/stepdance
+
+ConditionFileNotEmpty=/etc/%N.json
+
+[Service]
+LoadCredential=config.json:/etc/%N.json
+
+Environment=STEPDANCE_TEMPLATES=/usr/share/%N/templates
+ExecStart=/usr/bin/%N -config ${CREDENTIALS_DIRECTORY}/config.json
+
+AmbientCapabilities=
+CapabilityBoundingSet=
+DevicePolicy=closed
+DynamicUser=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+PrivateDevices=yes
+PrivateTmp=yes
+PrivateUsers=yes
+ProcSubset=pid
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectProc=invisible
+ProtectSystem=strict
+RestrictAddressFamilies=AF_INET6 AF_INET
+RestrictNamespaces=yes
+RestrictRealtime=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@resources @privileged
+UMask=0777
+
+[Install]
+WantedBy=multi-user.target
