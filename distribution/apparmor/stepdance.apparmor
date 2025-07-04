@@ -9,6 +9,7 @@ profile stepdance /usr/bin/stepdance {
   include <abstractions/nameservice>
 
   /usr/bin/stepdance mr,
+  /usr/share/stepdance/templates/*.html r,
 
   /etc/machine-id r,
   /proc/@{pid}/cpuset r,
