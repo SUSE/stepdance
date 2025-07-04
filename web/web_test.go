@@ -22,7 +22,10 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -37,6 +40,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/oauth2-proxy/mockoidc"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/net/html"
 	"golang.org/x/oauth2"
 )
 
@@ -105,6 +109,68 @@ func assertStatusEqual(t *testing.T, have int, want int) {
 	t.Helper()
 
 	assert.Equalf(t, want, have, "Have status %d, but want status %d", have, want)
+}
+
+func searchHtml(data string, tag string, key string, text []string) map[string]string {
+	tokenizer := html.NewTokenizer(strings.NewReader(data))
+
+	out := make(map[string]string)
+
+	var val string
+	var i int
+
+	for {
+		i = i + 1
+		tt := tokenizer.Next()
+
+		if val != "" {
+			if tt != html.TextToken {
+				continue
+			}
+
+			d := tokenizer.Token().Data
+			for _, search := range text {
+				if d == search {
+					out[d] = val
+				}
+			}
+
+			if len(text) == i {
+				break
+			}
+
+			val = ""
+		}
+
+		if tt == html.ErrorToken {
+			err := tokenizer.Err()
+			if err == io.EOF {
+				break
+			}
+
+			fmt.Println(err)
+			continue
+		}
+
+		if tt == html.StartTagToken {
+			tn, hasAttrs := tokenizer.TagName()
+
+			if len(tn) == 1 && string(tn[0]) == tag && (key == "" || hasAttrs) {
+				for {
+					k, v, more := tokenizer.TagAttr()
+					if string(k) == key {
+						val = string(v)
+					}
+
+					if !more {
+						break
+					}
+				}
+			}
+		}
+	}
+
+	return out
 }
 
 // test and return "Location" value after realGet()
@@ -319,8 +385,45 @@ func TestRequestCert(t *testing.T) {
 
 	assertStatusEqual(t, r.StatusCode, http.StatusOK)
 
-	assert.Contains(t, body, "Download certificate", "missing \"Download certificate\" button")
-	assert.Contains(t, body, "Download private key", "missing \"Download private key\" button")
+	buttons := []string{"Download certificate", "Download private key"}
+
+	for _, b := range buttons {
+		assert.Contains(t, body, b, "missing \""+b+"\" button")
+	}
+
+	links := searchHtml(body, "a", "href", buttons)
+
+	for k, l := range links {
+		assert.Contains(t, l, "/certificate/download")
+
+		var query string
+
+		switch k {
+		case buttons[0]:
+			query = "certificate"
+		case buttons[1]:
+			query = "key"
+		}
+
+		assert.Contains(t, l, "&data="+query)
+
+		r, body = realGet(t, l)
+
+		assertStatusEqual(t, r.StatusCode, http.StatusOK)
+
+		var err error
+		switch query {
+		case "certificate":
+			_, err = x509.ParseCertificate([]byte(body))
+		case "key":
+			block, rest := pem.Decode([]byte(body))
+			assert.NotNil(t, block, "Invalid PEM data")
+			assert.Equal(t, []byte{}, rest, "Excess PEM data")
+			_, err = x509.ParseECPrivateKey(block.Bytes)
+		}
+
+		assert.Nil(t, err, "Invalid data in download")
+	}
 }
 
 func TestIndexAuthenticatedWithCerts(t *testing.T) {
