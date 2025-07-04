@@ -45,7 +45,7 @@ func (s *Step) Token(subject string) string {
 	return token
 }
 
-func NewStep(caurl string, hash string, dburl string, adminpass string) *Step {
+func NewStep(caurl string, hash string, dburl string, adminprov string, adminpass string) *Step {
 	s := new(Step)
 
 	slog.Debug("Initializing CA client ...")
@@ -66,7 +66,11 @@ func NewStep(caurl string, hash string, dburl string, adminpass string) *Step {
 
 	s.client = client
 
-	prov, err := ca.NewProvisioner("Admin JWK", "", caurl, []byte(adminpass), ca.WithRootSHA256(hash))
+	if adminprov == "" {
+		adminprov = "Admin JWK"
+	}
+
+	prov, err := ca.NewProvisioner(adminprov, "", caurl, []byte(adminpass), ca.WithRootSHA256(hash))
 	if err != nil {
 		slog.Error("Could not initiate CA admin provisioner", "error", err)
 	}

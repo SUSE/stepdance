@@ -72,7 +72,7 @@ func main() {
 
 	s := new(web.Stepdance)
 
-	s.Step = cert.NewStep(c.CaUrl, c.CaHash, c.CaDbUrl, c.CaPass)
+	s.Step = cert.NewStep(c.CaUrl, c.CaHash, c.CaDbUrl, c.CaAdminProv, c.CaPass)
 
 	s.Ctx = context.Background()
 

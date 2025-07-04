@@ -32,6 +32,7 @@ type Config struct {
 	AppBaseUrl   string
 	BindAddress  string
 	BindPort     int
+	CaAdminProv  string
 	CaUrl        string
 	CaDbUrl      string
 	CaDbRefresh  string
