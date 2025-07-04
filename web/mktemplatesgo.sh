@@ -29,16 +29,29 @@ tee "$out" >/dev/null <<EOF
 
 package web
 
-import "html/template"
+import (
+	"html/template"
+	"os"
+)
 
 EOF
 
 tee -a "$out_f" >/dev/null <<EOF
 func readTemplates() *Templates {
-	// TODO: find root automatically instead of assuming working directory
-	tmpldir := "./web/templates/"
+	var tmpldir string
+
+	wd := os.Getenv("STEPDANCE_TEMPLATES")
 	if st != nil {
-		tmpldir = "./templates/"
+		tmpldir = "./templates"
+	} else if wd == "" {
+		wd, _ = os.Getwd()
+		tmpldir = wd + "/web/templates"
+	} else {
+		tmpldir = wd
+	}
+
+	if tmpldir[len(tmpldir)-1:] != "/" {
+		tmpldir = tmpldir + "/"
 	}
 
 	tmpls := new(Templates)
