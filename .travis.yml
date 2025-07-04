@@ -3,7 +3,7 @@ arch: arm64
 
 before_install:
   # shouldn't this be preinstalled according to https://docs.travis-ci.com/user/reference/noble/
-  - sudo apt-get -qy install podman
+  - sudo apt-get -qy install podman shellcheck
   # by default it would resolve to legacy IP
   - echo ::1 localhost | sudo tee -a /etc/hosts
 
@@ -13,5 +13,6 @@ go:
 language: go
 
 script:
+  - find . -type f -name '*.sh' -exec shellcheck {} +
   # rootless fails at privileges for newuidmap in travis/lxd
   - 2>&1 sudo make all
