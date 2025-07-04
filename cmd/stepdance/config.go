@@ -52,7 +52,10 @@ func newConfig(file string) Config {
 	}
 	defer fh.Close()
 
-	json.NewDecoder(fh).Decode(&c)
+	if err := json.NewDecoder(fh).Decode(&c); err != nil {
+		slog.Error("Failed to parse configuration file", "error", err)
+		os.Exit(1)
+	}
 
 	return c.Config
 }
