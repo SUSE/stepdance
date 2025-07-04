@@ -1,0 +1,20 @@
+# vim: ft=apparmor
+
+abi <abi/3.0>,
+
+include <tunables/global>
+
+profile stepdance /usr/bin/stepdance {
+  include <abstractions/base>
+  include <abstractions/nameservice>
+
+  /usr/bin/stepdance mr,
+
+  /etc/machine-id r,
+  /proc/@{pid}/cpuset r,
+  /run/credentials/stepdance.service/config.json r,
+
+  unix (send) type=stream,
+
+  include if exists <local/stepdance>
+}
