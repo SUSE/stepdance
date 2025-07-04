@@ -28,10 +28,10 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
-	"testing"
-	//"net/url"
+	"net/url"
 	"os/exec"
 	"strings"
+	"testing"
 
 	"github.com/SUSE/stepdance/cert"
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -244,18 +244,26 @@ func TestLogin(t *testing.T) {
 
 	assertStatusEqual(t, r.StatusCode, http.StatusFound)
 
-	location := realLocation(t, r)
-
-	// TODO: properly parse URLs instead of Contains
+	location, err := url.Parse(realLocation(t, r))
+	if err != nil {
+		t.Error(err)
+	}
 
 	// path from mock library
-	assert.Contains(t, location, "/oidc/authorize", "missing or wrong authorization redirection")
+	assert.Equal(t, location.Path, "/oidc/authorize", "missing or wrong authorization redirection")
 
-	assert.Contains(t, location, "&response_type=code", "missing or wrong response_type")
-	assert.Contains(t, location, "&scope=openid+profile+email", "missing or wrong scopes")
+	q := location.Query()
+
+	val, ok := q["response_type"]
+	assert.True(t, ok, "response_type parameter missing")
+	assert.Equal(t, []string{"code"}, val, "wrong response_type value")
+
+	val, ok = q["scope"]
+	assert.True(t, ok, "scope parameter missing")
+	assert.Equal(t, []string{"openid profile email"}, val, "wrong scope value")
 
 	// 2. follow the redirect to the OIDC provider
-	rr, _ := mockGet(t, location, srvoidc)
+	rr, _ := mockGet(t, location.String(), srvoidc)
 
 	// if this fails it is likely a problem with the provider mocking and not with our application
 	assertStatusEqual(t, rr.Code, http.StatusFound)
@@ -265,21 +273,31 @@ func TestLogin(t *testing.T) {
 	if !ok || len(locations) != 1 {
 		t.Error("missing \"Location\" header or too many of them")
 	}
-	location = locations[0]
 
-	assert.Contains(t, location, "/login/callback", "missing or wrong callback redirection")
-	assert.Contains(t, location, "?code=", "missing or wrong \"code\" parameter in callback redirection")
-	assert.Contains(t, location, "&state=", "missing or wrong \"state\" callback redirection")
+	location, err = url.Parse(locations[0])
+	if err != nil {
+		t.Error(err)
+	}
+
+	assert.Equal(t, "/login/callback", location.Path, "missing callback redirection")
+
+	q = location.Query()
+
+	_, ok = q["code"]
+	assert.True(t, ok, "code parameter missing")
+
+	_, ok = q["state"]
+	assert.True(t, ok, "state parameter missing")
 
 	// 3. follow the redirect to the service callback
-	r, _ = realGet(t, location)
+	r, _ = realGet(t, location.String())
 
 	assertStatusEqual(t, r.StatusCode, http.StatusFound)
 
-	location = realLocation(t, r)
+	locationBack := realLocation(t, r)
 
 	// 4. follow the redirect to the originally requested path
-	r, _ = realGet(t, location)
+	r, _ = realGet(t, locationBack)
 
 	assertStatusEqual(t, r.StatusCode, http.StatusOK)
 }
