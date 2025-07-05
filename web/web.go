@@ -19,51 +19,19 @@
 package web
 
 import (
-	"encoding/gob"
-	"github.com/SUSE/stepdance/cert"
-	"github.com/alexedwards/scs/v2"
-	"github.com/coreos/go-oidc/v3/oidc"
-	"golang.org/x/net/context"
-	"golang.org/x/oauth2"
+	"context"
 	"log/slog"
 	"net/http"
+
+	"github.com/coreos/go-oidc/v3/oidc"
+	"golang.org/x/oauth2"
+
+	"github.com/SUSE/stepdance/cert"
 )
 
-type Stepdance struct {
-	Oauth2Config   oauth2.Config
-	OidcConfig     *oidc.Config
-	OidcProvider   *oidc.Provider
-	Ctx            context.Context
-	Verifier       *oidc.IDTokenVerifier
-	templates      *Templates
-	sessionManager *scs.SessionManager
-	Step           *cert.Step
-}
-
-// these two should be in web_test.go, but "st" is currently used to change things needed for testing
-type steptest struct {
-	s       *Stepdance
-	srv     *http.Server
-	oidcsrv *http.Server
-	c       *http.Client
-}
-
-var st *steptest
-
-const (
-	SD_ERR_MISC  = 0 // internal issue
-	SD_ERR_CODE  = 1 // no or unexpected code value in session
-	SD_ERR_STATE = 2 // no or unexpected state value in session
-	SD_ERR_TOKEN = 3 // no or unexpected token value in session
-	SD_ERR_PARAM = 4 // missing query parameters
-	SD_ERR_ILLEG = 5 // operation on data not owned by requestor
-)
-
-func InitStepdance(s *Stepdance, bind string) *http.Server {
-	s.sessionManager = newSessionManager()
-
+func (s *Stepdance) newMux() *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", s.IndexHandler)
+	mux.HandleFunc("/", s.indexHandler)
 	mux.HandleFunc("/login/init", s.loginHandler)
 	mux.HandleFunc("/login/callback", s.callbackHandler)
 	mux.HandleFunc("/certificate/download", s.downloadHandler)
@@ -72,50 +40,7 @@ func InitStepdance(s *Stepdance, bind string) *http.Server {
 
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./web/static"))))
 
-	s.templates = readTemplates()
-
-	gob.Register(&oauth2.Token{})
-
-	srv := &http.Server{
-		Addr:    bind,
-		Handler: s.sessionManager.LoadAndSave(s.initHandler(mux)),
-	}
-
-	go func() {
-		err := srv.ListenAndServe()
-		if err != nil && err != http.ErrServerClosed {
-			panic(err)
-		}
-	}()
-
-	slog.Info("Listening ...", "bind", bind)
-
-	return srv
-}
-
-func (s *Stepdance) errorHandler(w http.ResponseWriter, r *http.Request, sdErr int, text string) {
-	p := newErrorData(text, s.getSessionId(r))
-
-	switch sdErr {
-	case SD_ERR_MISC:
-		w.WriteHeader(http.StatusInternalServerError)
-		s.templates.InternalError.ExecuteTemplate(w, "base", p)
-	case SD_ERR_CODE:
-		w.WriteHeader(http.StatusBadRequest)
-		s.templates.MissingCode.ExecuteTemplate(w, "base", p)
-	case SD_ERR_PARAM:
-		w.WriteHeader(http.StatusBadRequest)
-		s.templates.MissingParameter.ExecuteTemplate(w, "base", p)
-	case SD_ERR_STATE:
-		w.WriteHeader(http.StatusBadRequest)
-		s.templates.BadState.ExecuteTemplate(w, "base", p)
-	case SD_ERR_TOKEN:
-		w.WriteHeader(http.StatusBadRequest)
-		s.templates.MissingToken.ExecuteTemplate(w, "base", p)
-	case SD_ERR_ILLEG:
-		w.WriteHeader(http.StatusForbidden)
-		s.templates.Illegal.ExecuteTemplate(w, "base", p)
-	}
+	return mux
 }
 
 func (s *Stepdance) tokenValidator(w http.ResponseWriter, r *http.Request) (*oauth2.Token, bool) {
@@ -206,7 +131,7 @@ func (s *Stepdance) initHandler(next http.Handler) http.Handler {
 	})
 }
 
-func (s *Stepdance) IndexHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Stepdance) indexHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
 		return

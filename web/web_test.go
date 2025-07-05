@@ -36,12 +36,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/SUSE/stepdance/cert"
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/oauth2-proxy/mockoidc"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/html"
 	"golang.org/x/oauth2"
+
+	"github.com/SUSE/stepdance/cert"
 )
 
 const (

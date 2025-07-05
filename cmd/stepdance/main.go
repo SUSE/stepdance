@@ -19,18 +19,14 @@
 package main
 
 import (
+	"context"
 	"flag"
-	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
 	"time"
 
-	"github.com/coreos/go-oidc/v3/oidc"
-	"golang.org/x/net/context"
-	"golang.org/x/oauth2"
-
-	"github.com/SUSE/stepdance/cert"
+	"github.com/SUSE/stepdance/core"
 	"github.com/SUSE/stepdance/web"
 )
 
@@ -45,71 +41,20 @@ func main() {
 	fs.StringVar(&logLevelArg, "loglevel", "info", "Logging level")
 	fs.Parse(os.Args[1:])
 
-	var logLevel slog.Level
-	if err := logLevel.UnmarshalText([]byte(logLevelArg)); err != nil {
-		panic(err)
-	}
+	slog.SetDefault(newSlog(newLogLevel(logLevelArg)))
 
-	slog.SetDefault(slog.New(&logHandler{
-		TextHandler: slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel}),
-	}))
-
-	c := newConfig(configArg)
+	c := core.NewConfig(configArg)
 
 	slog.Info("Booting Stepdance ...")
 
-	var td *time.Duration
-	if c.CaDbRefresh == "" {
-		tdtmp := (5 * time.Minute)
-		td = &tdtmp
-	} else {
-		td = parseConfigTime(c.CaDbRefresh)
-	}
+	s, bind := web.NewStepdance(c)
 
+	td := core.GetInterval(c.CaDbRefresh)
 	if td == nil {
 		os.Exit(1)
 	}
 
-	s := new(web.Stepdance)
-
-	s.Step = cert.NewStep(c.CaUrl, c.CaHash, c.CaDbUrl, c.CaAdminProv, c.CaPass)
-
-	s.Ctx = context.Background()
-
-	slog.Debug("Initializing OIDC provider ...")
-
-	provider, err := oidc.NewProvider(s.Ctx, c.OidcBaseUrl)
-	if err != nil {
-		panic(err)
-	}
-
-	s.OidcConfig = &oidc.Config{
-		ClientID: c.ClientId,
-	}
-
-	s.OidcProvider = provider
-
-	s.Verifier = provider.Verifier(s.OidcConfig)
-
-	// todo: IPv6 wrap
-	bind := fmt.Sprintf("%s:%d", c.BindAddress, c.BindPort)
-
-	slog.Debug("Initializing Oauth2 ...")
-
-	abu := c.AppBaseUrl
-	if abu == "" {
-		abu = "http://" + bind
-	}
-
-	s.Oauth2Config = oauth2.Config{
-		ClientID:     c.ClientId,
-		ClientSecret: c.ClientSecret,
-		Endpoint:     provider.Endpoint(),
-		RedirectURL:  abu + "/login/callback",
-		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
-	}
-
-	slog.Debug("Initialization sequence complete, starting web server ...")
+	slog.Debug("Initialization sequence complete, starting web server and scheduler ...")
 
 	cs := make(chan os.Signal, 1)
 	signal.Notify(cs, os.Interrupt)

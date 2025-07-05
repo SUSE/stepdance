@@ -19,8 +19,9 @@
 package web
 
 import (
-	"github.com/alexedwards/scs/v2"
 	"time"
+
+	"github.com/alexedwards/scs/v2"
 )
 
 func newSessionManager() *scs.SessionManager {

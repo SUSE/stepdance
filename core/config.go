@@ -16,12 +16,14 @@
    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-package main
+package core
 
 import (
 	"encoding/json"
 	"log/slog"
 	"os"
+	"strconv"
+	"time"
 )
 
 type topConfig struct {
@@ -43,7 +45,7 @@ type Config struct {
 	OidcBaseUrl  string
 }
 
-func newConfig(file string) Config {
+func NewConfig(file string) Config {
 	c := new(topConfig)
 
 	fh, err := os.Open(file)
@@ -59,4 +61,42 @@ func newConfig(file string) Config {
 	}
 
 	return c.Config
+}
+
+func GetInterval(input string) *time.Duration {
+	if input == "" {
+		tdtmp := (5 * time.Minute)
+		return &tdtmp
+	} else {
+		return parseConfigTime(input)
+	}
+}
+
+func parseConfigTime(input string) *time.Duration {
+	if input == "" {
+		return nil
+	}
+
+	var timeUnit time.Duration
+
+	unit := input[len(input)-1:]
+	switch unit {
+	case "m":
+		timeUnit = time.Minute
+	case "s":
+		timeUnit = time.Second
+	default:
+		slog.Error("Invalid time unit in CaDbRefresh", "value", input, "unit", unit)
+		return nil
+	}
+
+	value, err := strconv.Atoi(input[:len(input)-1])
+	if err != nil {
+		slog.Error("Invalid time value in CaDbRefresh", "value", input, "error", err)
+		return nil
+	}
+
+	td := (time.Duration(value) * timeUnit)
+
+	return &td
 }

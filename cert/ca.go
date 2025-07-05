@@ -20,11 +20,12 @@ package cert
 
 import (
 	"database/sql"
-	"github.com/smallstep/certificates/ca"
 	"log/slog"
 	"net/url"
 	"os"
 	"sync/atomic"
+
+	"github.com/smallstep/certificates/ca"
 )
 
 type Step struct {

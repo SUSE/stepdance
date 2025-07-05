@@ -21,6 +21,7 @@ package main
 import (
 	"context"
 	"log/slog"
+	"os"
 )
 
 type logHandler struct {
@@ -33,4 +34,19 @@ func (lh *logHandler) Handle(ctx context.Context, r slog.Record) error {
 	}
 
 	return lh.TextHandler.Handle(ctx, r)
+}
+
+func newLogLevel(inLevel string) slog.Level {
+	var outLevel slog.Level
+	if err := outLevel.UnmarshalText([]byte(inLevel)); err != nil {
+		panic(err)
+	}
+
+	return outLevel
+}
+
+func newSlog(level slog.Level) *slog.Logger {
+	return slog.New(&logHandler{
+		TextHandler: slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}),
+	})
 }

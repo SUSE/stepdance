@@ -22,10 +22,11 @@ import (
 	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/pem"
-	"github.com/smallstep/certificates/api"
-	"github.com/smallstep/certificates/ca"
 	"log/slog"
 	"time"
+
+	"github.com/smallstep/certificates/api"
+	"github.com/smallstep/certificates/ca"
 )
 
 const timeFormat = time.RFC3339
