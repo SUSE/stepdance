@@ -100,6 +100,8 @@ func mockGet(t *testing.T, path string, srv int) (*httptest.ResponseRecorder, st
 		st.srv.Handler.ServeHTTP(rr, r)
 	case srvoidc:
 		st.oidcsrv.Handler.ServeHTTP(rr, r)
+	default:
+		t.Fatal("invalid case in mockGet()")
 	}
 
 	return rr, rr.Body.String()
@@ -404,6 +406,8 @@ func TestRequestCert(t *testing.T) {
 			query = "certificate"
 		case buttons[1]:
 			query = "key"
+		default:
+			query = "INVALID_QUERY"
 		}
 
 		assert.Contains(t, l, "&data="+query)
@@ -421,6 +425,8 @@ func TestRequestCert(t *testing.T) {
 			assert.NotNil(t, block, "Invalid PEM data")
 			assert.Equal(t, []byte{}, rest, "Excess PEM data")
 			_, err = x509.ParseECPrivateKey(block.Bytes)
+		default:
+			t.Fatal("Invalid")
 		}
 
 		assert.Nil(t, err, "Invalid data in download")
