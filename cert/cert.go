@@ -23,6 +23,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/smallstep/certificates/api"
@@ -34,7 +35,8 @@ const timeFormat = time.RFC3339
 type DbCertificate struct {
 	Raw     x509.Certificate
 	CN      string
-	Serial  string // some sort of integer might make more sense but the default big.Int was difficult to read
+	Serial  string
+	SerialH string  // human friendly representation
 	Revoked bool
 	// store converted timestamps already as these fields are only used for display in HTML
 	NotBefore string
@@ -110,6 +112,7 @@ func (s *Step) GetCertificates() DbCertificates {
 			Raw:       *crt,
 			CN:        crt.Subject.CommonName,
 			Serial:    crt.SerialNumber.String(),
+			SerialH:   strings.ToUpper(crt.SerialNumber.Text(16)),
 			Revoked:   revoked,
 			NotBefore: crt.NotBefore.Format(timeFormat),
 			NotAfter:  crt.NotAfter.Format(timeFormat),
