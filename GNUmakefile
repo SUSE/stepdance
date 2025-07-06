@@ -1,4 +1,4 @@
-SRCDIRS = cert cmd/stepdance web
+SRCDIRS = core cert cmd/stepdance web
 
 .PHONY: build dev test all
 
