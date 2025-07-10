@@ -23,7 +23,48 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"io"
+	"log/slog"
+	"os"
 )
+
+const pkgWebDir = "/usr/share/stepdance/web"
+
+func getWebDir(purpose string) string {
+	var webdir string
+
+	if purpose != "static" && purpose != "templates" {
+		slog.Error("invalid use of getWebDir()")
+		os.Exit(1)
+	}
+
+	wd := os.Getenv("STEPDANCE_WEBDIR")
+	shared, err := os.Stat(pkgWebDir)
+
+	if err != nil {
+		slog.Debug("Failed to open shared web directory", "purpose", purpose, "error", err)
+	}
+
+	if st != nil {
+		webdir = "./"
+	} else if wd != "" {
+		webdir = wd
+	} else if err == nil && shared.IsDir() {
+		webdir = pkgWebDir
+	} else {
+		wd, _ = os.Getwd()
+		webdir = wd + "/web"
+	}
+
+	if webdir[len(webdir)-1:] != "/" {
+		webdir = webdir + "/"
+	}
+
+	webdir = webdir + purpose + "/"
+
+	slog.Debug("Got web directory", "purpose", purpose, "path", webdir)
+
+	return webdir
+}
 
 func randString(nByte int, urlEncode bool) (string, error) {
 	b := make([]byte, nByte)

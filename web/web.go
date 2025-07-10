@@ -38,7 +38,7 @@ func (s *Stepdance) newMux() *http.ServeMux {
 	mux.HandleFunc("/certificate/request", s.certReqHandler)
 	mux.HandleFunc("/certificate/revoke", s.certRevHandler)
 
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./web/static"))))
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(getWebDir("static")))))
 
 	return mux
 }

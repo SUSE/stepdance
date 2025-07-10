@@ -16,6 +16,7 @@
 #
 
 
+%define webdir %{_datadir}/%{name}/web
 %if 0%{?suse_version} < 1600
 %define apparmor_profilesdir %{_sysconfdir}/apparmor.d
 %endif
@@ -44,17 +45,17 @@ go build -buildmode=pie -mod=vendor ./cmd/stepdance
 
 %install
 install -d \
-	%{buildroot}%{apparmor_profilesdir} \
-	 %{buildroot}%{_bindir} \
-	%{buildroot}%{_datadir}/%{name}/templates \
+	%{buildroot}%{_bindir} \
 	%{buildroot}%{_sbindir} \
 	%{buildroot}%{_sysconfdir} \
 	%{buildroot}%{_unitdir} \
+	%{buildroot}%{apparmor_profilesdir} \
+	%{buildroot}%{webdir} \
 %{nil}
 
 install %{name} %{buildroot}%{_bindir}
 
-cp web/templates/*.html %{buildroot}%{_datadir}/%{name}/templates
+cp -r web/{static,templates} %{buildroot}%{webdir}
 
 install -m0644 distribution/apparmor/%{name}.apparmor %{buildroot}%{apparmor_profilesdir}/%{name}
 install -m0644 distribution/systemd/* %{buildroot}%{_unitdir}
@@ -85,8 +86,13 @@ fi
 %{_bindir}/%{name}
 %{_sbindir}/rc%{name}
 %dir %{_datadir}/%{name}
-%dir %{_datadir}/%{name}/templates
-%{_datadir}/%{name}/templates/*.html
+%dir %{webdir}
+%dir %{webdir}/static
+%dir %{webdir}/static/fonts
+%dir %{webdir}/templates
+%{webdir}/static/*.css
+%{webdir}/static/fonts/*.woff2
+%{webdir}/templates/*.html
 %dir %{apparmor_profilesdir}
 %config %{apparmor_profilesdir}/%{name}
 %{_unitdir}/%{name}.service
