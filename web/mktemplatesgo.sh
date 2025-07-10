@@ -63,6 +63,8 @@ func readTemplates() *Templates {
 		tmpldir = tmpldir + "/"
 	}
 
+	slog.Debug("got templates directory", "directory", tmpldir)
+
 	tmpls := new(Templates)
 
 EOF

@@ -63,6 +63,8 @@ func readTemplates() *Templates {
 		tmpldir = tmpldir + "/"
 	}
 
+	slog.Debug("got templates directory", "directory", tmpldir)
+
 	tmpls := new(Templates)
 
 	tmpls.BadState = template.Must(template.ParseFiles(tmpldir+"bad_state.html", tmpldir+"top.html", tmpldir+"base.html"))
