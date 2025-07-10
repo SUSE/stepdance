@@ -7,7 +7,6 @@ ConditionFileNotEmpty=/etc/%N.json
 [Service]
 LoadCredential=config.json:/etc/%N.json
 
-Environment=STEPDANCE_TEMPLATES=/usr/share/%N/templates
 ExecStart=/usr/bin/%N -config ${CREDENTIALS_DIRECTORY}/config.json
 
 AmbientCapabilities=

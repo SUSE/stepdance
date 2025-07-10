@@ -22,6 +22,7 @@ package web
 
 import (
 	"html/template"
+	"log/slog"
 	"os"
 )
 
@@ -41,13 +42,21 @@ func readTemplates() *Templates {
 	var tmpldir string
 
 	wd := os.Getenv("STEPDANCE_TEMPLATES")
+	shared, err := os.Stat("/usr/share/stepdance/templates")
+
+	if err != nil {
+		slog.Debug("failed to open shared template directory", "error", err)
+	}
+
 	if st != nil {
 		tmpldir = "./templates"
-	} else if wd == "" {
+	} else if wd != "" {
+		tmpldir = wd
+	} else if err == nil && shared.IsDir() {
+		tmpldir = shared.Name()
+	} else {
 		wd, _ = os.Getwd()
 		tmpldir = wd + "/web/templates"
-	} else {
-		tmpldir = wd
 	}
 
 	if tmpldir[len(tmpldir)-1:] != "/" {
