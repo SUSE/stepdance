@@ -51,14 +51,15 @@ func NewStep(caurl string, cacert string, hash string, dburl string, adminprov s
 
 	slog.Debug("Initializing CA client ...")
 
-	var client *ca.Client
-	var err error
+	var copt ca.ClientOption
 
 	if cacert == "" {
-		client, err = ca.NewClient(caurl, ca.WithRootSHA256(hash))
+		copt = ca.WithRootSHA256(hash)
 	} else {
-		client, err = ca.NewClient(caurl, ca.WithRootFile(cacert))
+		copt = ca.WithRootFile(cacert)
 	}
+
+	client, err := ca.NewClient(caurl, copt)
 	if err != nil {
 		slog.Error("Could not initiate CA client", "error", err)
 		os.Exit(1)
@@ -78,7 +79,7 @@ func NewStep(caurl string, cacert string, hash string, dburl string, adminprov s
 		adminprov = "Admin JWK"
 	}
 
-	prov, err := ca.NewProvisioner(adminprov, "", caurl, []byte(adminpass), ca.WithRootSHA256(hash))
+	prov, err := ca.NewProvisioner(adminprov, "", caurl, []byte(adminpass), copt)
 	if err != nil {
 		slog.Error("Could not initiate CA admin provisioner", "error", err)
 	}
