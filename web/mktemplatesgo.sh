@@ -38,11 +38,13 @@ import (
 EOF
 
 tee -a "$out_f" >/dev/null <<EOF
+const pkgTmplDir = "/usr/share/stepdance/templates"
+
 func readTemplates() *Templates {
 	var tmpldir string
 
 	wd := os.Getenv("STEPDANCE_TEMPLATES")
-	shared, err := os.Stat("/usr/share/stepdance/templates")
+	shared, err := os.Stat(pkgTmplDir)
 
 	if err != nil {
 		slog.Debug("failed to open shared template directory", "error", err)
@@ -53,7 +55,7 @@ func readTemplates() *Templates {
 	} else if wd != "" {
 		tmpldir = wd
 	} else if err == nil && shared.IsDir() {
-		tmpldir = shared.Name()
+		tmpldir = pkgTmplDir
 	} else {
 		wd, _ = os.Getwd()
 		tmpldir = wd + "/web/templates"
