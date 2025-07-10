@@ -58,7 +58,7 @@ func NewStepdance(c core.Config) (*Stepdance, string) {
 	s := new(Stepdance)
 	s.Ctx = context.Background()
 
-	s.Step = cert.NewStep(c.CaUrl, c.CaHash, c.CaDbUrl, c.CaAdminProv, c.CaPass)
+	s.Step = cert.NewStep(c.CaUrl, c.CaCert, c.CaHash, c.CaDbUrl, c.CaAdminProv, c.CaPass)
 
 	slog.Debug("Initializing OIDC provider ...")
 

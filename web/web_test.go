@@ -225,6 +225,7 @@ func TestMain(m *testing.M) {
 	// connect to StepCA as deployed by test/setup.sh
 	st.s.Step = cert.NewStep(
 		"https://localhost:9000",
+		"",
 		"9da25f5056fdc3901a827b5e2639af48bef834f17e51a2de15e38e2f775c907e",
 		"postgresql://step:step@localhost/step",
 		"",

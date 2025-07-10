@@ -46,12 +46,19 @@ func (s *Step) Token(subject string) string {
 	return token
 }
 
-func NewStep(caurl string, hash string, dburl string, adminprov string, adminpass string) *Step {
+func NewStep(caurl string, cacert string, hash string, dburl string, adminprov string, adminpass string) *Step {
 	s := new(Step)
 
 	slog.Debug("Initializing CA client ...")
 
-	client, err := ca.NewClient(caurl, ca.WithRootSHA256(hash))
+	var client *ca.Client
+	var err error
+
+	if cacert == "" {
+		client, err = ca.NewClient(caurl, ca.WithRootSHA256(hash))
+	} else {
+		client, err = ca.NewClient(caurl, ca.WithRootFile(cacert))
+	}
 	if err != nil {
 		slog.Error("Could not initiate CA client", "error", err)
 		os.Exit(1)

@@ -35,6 +35,7 @@ type Config struct {
 	BindAddress  string
 	BindPort     int
 	CaAdminProv  string
+	CaCert       string
 	CaUrl        string
 	CaDbUrl      string
 	CaDbRefresh  string
